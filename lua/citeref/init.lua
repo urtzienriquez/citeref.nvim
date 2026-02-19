@@ -161,16 +161,34 @@ end
 -- Attach
 -- ─────────────────────────────────────────────────────────────
 
-local attached_bufs = {}
+local attached_bufs  = {}
+local _backend_checked = false
+local _backend_ok      = false
+
+--- Returns true if at least one usable backend is available (cached after first call).
+local function has_any_backend()
+  if _backend_checked then return _backend_ok end
+  _backend_checked = true
+  _backend_ok = pcall(require, "fzf-lua")
+    or pcall(require, "blink.cmp")
+    or pcall(require, "cmp")
+  return _backend_ok
+end
 
 function M.attach()
   local buf = vim.api.nvim_get_current_buf()
   if attached_bufs[buf] then return end
+
+  if not has_any_backend() then
+    vim.notify(
+      "citeref: no backend found. Install fzf-lua, blink.cmp, or nvim-cmp.",
+      vim.log.levels.WARN
+    )
+    return  -- don't attach, don't set keymaps, don't try again for this buf
+  end
+
   attached_bufs[buf] = true
-
   set_keymaps()
-
-  -- Register completion source once (idempotent inside register())
   require("citeref.completion").register()
 
   vim.api.nvim_create_autocmd("BufDelete", {
@@ -191,7 +209,7 @@ function M.debug()
 
   print(string.format("citeref debug — buf=%d  ft=%q  attached=%s",
     buf, ft, tostring(attached_bufs[buf] == true)))
-  print("Backend: " .. (has_fzf() and "fzf-lua" or "completion (blink/cmp)"))
+  print("Backend: " .. (has_fzf() and "fzf-lua" or (has_any_backend() and "completion (blink/cmp)" or "NONE – plugin inactive")))
   print("Active filetypes: " .. table.concat(cfg.filetypes, ", "))
 
   local found = {}

@@ -1,20 +1,33 @@
 # citeref.nvim
 
-A Neovim plugin for inserting **citations** (from `.bib` files) and **cross-references** (to R/Quarto code chunks) using [fzf-lua](https://github.com/ibhagwan/fzf-lua).
+A Neovim plugin for inserting **citations** (from `.bib` files) and **cross-references** (to R/Quarto code chunks).
 
----
-
-## Design
-
-`citeref.nvim` lazy-loads itself through Neovim's native `FileType` autocommand machinery.  
-**You do not need to call `setup()`** — just install the plugin and it activates automatically for the right filetypes. `setup()` exists only to override defaults.
+Supports [fzf-lua](https://github.com/ibhagwan/fzf-lua) (preferred picker), [blink.cmp](https://github.com/Saghen/blink.cmp), and [nvim-cmp](https://github.com/hrsh7th/nvim-cmp) as backends. At least one of these must be installed.
 
 ---
 
 ## Requirements
 
-- [fzf-lua](https://github.com/ibhagwan/fzf-lua)
-- A `.bib` file (default: `~/Documents/zotero.bib` and/or `*.bib` in cwd)
+- At least one of:
+  - [fzf-lua](https://github.com/ibhagwan/fzf-lua) — full picker with preview (preferred)
+  - [blink.cmp](https://github.com/Saghen/blink.cmp) — completion menu fallback
+  - [nvim-cmp](https://github.com/hrsh7th/nvim-cmp) — completion menu fallback
+
+If none of the above are installed the plugin will warn once and stay inactive.
+
+---
+
+## How it works
+
+citeref self-activates via a `FileType` autocommand — **you do not need to call `setup()`**. When you open a supported filetype, the plugin attaches to that buffer and sets buffer-local keymaps.
+
+Without `setup()`, only `*.bib` files in the **current working directory** are used for citations. To include a global library (e.g. Zotero), call `setup()` with `bib_files`.
+
+Backend priority at runtime:
+
+1. **fzf-lua** — full fuzzy picker with preview, works in both insert and normal mode
+2. **blink.cmp** — completion menu, insert mode only
+3. **nvim-cmp** — completion menu, insert mode only
 
 ---
 
@@ -26,48 +39,46 @@ A Neovim plugin for inserting **citations** (from `.bib` files) and **cross-refe
 {
   "urtzienriquez/citeref.nvim",
   ft           = { "markdown", "rmd", "quarto", "rnoweb", "pandoc", "tex", "latex" },
-  dependencies = { "ibhagwan/fzf-lua" },  -- optional but preferred
-  config = function()
+  dependencies = { "ibhagwan/fzf-lua" },  -- remove if not using fzf-lua
+  config = function() -- config / setup() is optional; call it only if you need to override defaults.
     require("citeref").setup({
-      bib_files = { "~/Documents/zotero.bib" },
+      bib_files = { "/path/to/you/library.bib" },
     })
   end,
 }
 ```
 
-`fzf-lua` is optional. If not present, keymaps fall back to forcing the
-completion menu open via **blink.cmp** (preferred) or **nvim-cmp**.
+If you use blink.cmp or nvim-cmp as your backend, drop `fzf-lua` from `dependencies` and add the appropriate completion source config below.
 
-### Completion source (blink.cmp)
+### blink.cmp source
 
-Add `"citeref"` to your blink.cmp sources so citations appear automatically
-when you type `@`, and are also available via the forced-menu keymaps:
+Register the source in your blink.cmp config so citations appear when you type `@`, in addition to being available via the keymaps:
 
 ```lua
--- in your blink.cmp config:
+-- Recommended: per-filetype so citations only appear in relevant files
 sources = {
-  default = { "lsp", "path", "snippets", "buffer", "citeref" },
+  default = { "lsp", "path", "snippets", "buffer" },
   providers = {
     citeref = {
       name   = "citeref",
       module = "citeref.completion",
     },
   },
-  -- or per-filetype only:
   per_filetype = {
     markdown = { inherit_defaults = true, "citeref" },
     rmd      = { inherit_defaults = true, "citeref" },
     quarto   = { inherit_defaults = true, "citeref" },
+    tex      = { inherit_defaults = true, "citeref" },
+    latex    = { inherit_defaults = true, "citeref" },
   },
 },
 ```
 
-### Completion source (nvim-cmp)
+Note: `per_filetype` controls where `@` auto-triggers citations. The keymaps (`<C-a>m` etc.) are independent and always active in supported filetypes regardless of this setting.
 
-***Untested! Experimental!***
+### nvim-cmp source (experimental)
 
 ```lua
--- in your nvim-cmp config:
 sources = cmp.config.sources({
   { name = "nvim_lsp" },
   { name = "citeref" },
@@ -75,48 +86,53 @@ sources = cmp.config.sources({
 })
 ```
 
-nvim-cmp sources are registered automatically when citeref attaches to a
-buffer — no extra configuration needed beyond adding `{ name = "citeref" }`.
+The source is registered automatically when citeref attaches to a buffer.
 
 ---
 
 ## Configuration (optional)
 
-Call `setup()` anywhere in your config **before** opening a relevant buffer — or not at all.
+All options have sane defaults. Call `setup()` only to override them.
 
 ```lua
 require("citeref").setup({
-  -- Filetypes where citeref activates. Default shown below.
+
+  -- Filetypes where citeref activates.
   filetypes = {
-    "markdown", "rmd", "quarto", "jmd", "pandoc", "tex", "latex",
+    "markdown", "rmd", "quarto", "rnoweb", "pandoc", "tex", "latex",
   },
 
-  -- Bib file(s) to search for citations.
-  -- Accepts:
-  --   nil            → scan cwd for *.bib files; warns if none found  (default)
-  --   string[]       → explicit list of paths (~ expanded, warns on missing files)
-  --   fun():string[] → called each time a picker opens (dynamic resolution)
+  -- .bib files to search for citations.
   --
-  -- Recommended: point this at your main library:
-  bib_files = { "~/Documents/zotero.bib" },
+  -- Without setup(), only *.bib files in the current working directory
+  -- are used. Call setup() with bib_files to add a global library.
+  --
+  -- Accepts:
+  --   string[]       → explicit paths (~ expanded; missing files warned)
+  --   fun():string[] → function called each time a picker opens
+  --
+  -- Configured files are ADDITIVE with cwd *.bib — both are always used.
+  bib_files = { "/path/to/you/library.bib" },
 
   keymaps = {
     -- Set to false to disable ALL default keymaps.
     enabled = true,
 
     -- Each action has a separate insert-mode (_i) and normal-mode (_n) key.
-    -- Set either to false to disable just that one mapping.
-    cite_markdown_i   = "<C-a>m",      -- insert @key        (insert mode)
-    cite_markdown_n   = "<leader>am",  -- insert @key        (normal mode)
-    cite_latex_i      = "<C-a>l",      -- insert \cite{key}  (insert mode)
-    cite_latex_n      = "<leader>al",  -- insert \cite{key}  (normal mode)
+    -- Set any key to false to disable just that mapping.
+    -- Normal-mode keymaps require fzf-lua; they warn if it is absent.
+    cite_markdown_i   = "<C-a>m",      -- insert @key            (insert mode)
+    cite_markdown_n   = "<leader>am",  -- insert @key            (normal mode)
+    cite_latex_i      = "<C-a>l",      -- insert \cite{key}      (insert mode)
+    cite_latex_n      = "<leader>al",  -- insert \cite{key}      (normal mode)
     cite_replace_n    = "<leader>ar",  -- replace key under cursor (normal only)
-    crossref_figure_i = "<C-a>f",      -- \@ref(fig:X)       (insert mode)
-    crossref_figure_n = "<leader>af",  -- \@ref(fig:X)       (normal mode)
-    crossref_table_i  = "<C-a>t",      -- \@ref(tab:X)       (insert mode)
-    crossref_table_n  = "<leader>at",  -- \@ref(tab:X)       (normal mode)
+    crossref_figure_i = "<C-a>f",      -- \@ref(fig:X)           (insert mode)
+    crossref_figure_n = "<leader>af",  -- \@ref(fig:X)           (normal mode)
+    crossref_table_i  = "<C-a>t",      -- \@ref(tab:X)           (insert mode)
+    crossref_table_n  = "<leader>at",  -- \@ref(tab:X)           (normal mode)
   },
 
+  -- fzf-lua picker appearance (ignored when using completion engine fallback)
   picker = {
     layout       = "vertical",
     preview_size = "50%",
@@ -126,86 +142,52 @@ require("citeref").setup({
 
 ### Overriding a single keymap
 
-Because keymaps are **buffer-local** and set only when a buffer with a matching
-filetype is opened, you can override them either:
-
-**Before the plugin sets them** (in your own `FileType` autocommand):
+Keymaps are buffer-local and set when the buffer is first attached. Override them by setting your own before citeref runs (higher-priority `FileType` autocmd), or by disabling defaults and mapping freely:
 
 ```lua
+-- Disable all defaults and map your own
+require("citeref").setup({ keymaps = { enabled = false } })
+
 vim.api.nvim_create_autocmd("FileType", {
-  pattern  = { "markdown", "quarto" },
-  priority = 1000,          -- higher than citeref's default
+  pattern  = { "markdown", "quarto", "rmd" },
   callback = function()
-    vim.keymap.set("i", "<C-a>m", require("citeref").cite_markdown, { buffer = true })
+    local cr = require("citeref")
+    vim.keymap.set("i", "<M-c>", cr.cite_markdown, { buffer = true })
+    vim.keymap.set("i", "<M-r>", cr.crossref_figure, { buffer = true })
   end,
 })
 ```
 
-**Or simply disable defaults and map freely:**
+---
+
+## Default keymaps
+
+| Mode   | Key           | Action                                | Requires       |
+|--------|---------------|---------------------------------------|----------------|
+| insert | `<C-a>m`      | Insert citation (`@key`)              | any backend    |
+| normal | `<leader>am`  | Insert citation (`@key`)              | fzf-lua        |
+| insert | `<C-a>l`      | Insert citation (`\cite{key}`)        | any backend    |
+| normal | `<leader>al`  | Insert citation (`\cite{key}`)        | fzf-lua        |
+| normal | `<leader>ar`  | Replace citation under cursor         | fzf-lua        |
+| insert | `<C-a>f`      | Insert figure crossref `\@ref(fig:X)` | any backend    |
+| normal | `<leader>af`  | Insert figure crossref `\@ref(fig:X)` | fzf-lua        |
+| insert | `<C-a>t`      | Insert table crossref `\@ref(tab:X)`  | any backend    |
+| normal | `<leader>at`  | Insert table crossref `\@ref(tab:X)`  | fzf-lua        |
+
+Normal-mode keymaps without fzf-lua will show a warning instead of opening a picker — there is no completion-menu equivalent for normal mode.
+
+---
+
+## Bib file resolution
+
+Without `setup()`, citeref scans `*.bib` files in the current working directory only. If none are found, it warns once when you try to insert a citation.
+
+With `setup({ bib_files = { ... } })`, the configured files are combined with any cwd `*.bib` files (both are always used, duplicates removed).
 
 ```lua
+-- Always include your main *.bib (e.g. Zotero) library plus any project-local .bib
 require("citeref").setup({
-  keymaps = { enabled = false },
-})
-
--- Then set your own wherever you like:
-vim.keymap.set("i", "<M-c>", require("citeref").cite_markdown)
-```
-
----
-
-## Default Keymaps
-
-| Mode   | Key              | Action                              |
-|--------|------------------|-------------------------------------|
-| insert | `<C-a>m`         | Insert citation (markdown `@key`)   |
-| normal | `<leader>am`     | Insert citation (markdown `@key`)   |
-| insert | `<C-a>l`         | Insert citation (LaTeX `\cite{}`)   |
-| normal | `<leader>al`     | Insert citation (LaTeX `\cite{}`)   |
-| normal | `<leader>ar`     | Replace citation under cursor       |
-| insert | `<C-a>f`         | Insert figure crossref `\@ref(fig:X)` |
-| normal | `<leader>af`     | Insert figure crossref `\@ref(fig:X)` |
-| insert | `<C-a>t`         | Insert table crossref `\@ref(tab:X)`  |
-| normal | `<leader>at`     | Insert table crossref `\@ref(tab:X)`  |
-
-All keymaps are **buffer-local** (only active in matching filetypes) and each has
-its own config key (`cite_markdown_i`, `cite_markdown_n`, etc.) so you can
-remap or disable them individually.
-
----
-
-## API
-
-All functions are also accessible programmatically:
-
-```lua
-local citeref = require("citeref")
-
-citeref.cite_markdown()   -- open picker → insert @key
-citeref.cite_latex()      -- open picker → insert \cite{key}
-citeref.cite_replace()    -- open picker → replace key under cursor
-citeref.crossref_figure() -- open picker → insert \@ref(fig:label)
-citeref.crossref_table()  -- open picker → insert \@ref(tab:label)
-```
-
----
-
-## Bib file auto-detection
-
-By default, citeref looks for:
-
-1. `~/Documents/zotero.bib` (if it exists)
-2. Any `*.bib` file in the current working directory
-
-You can supply an explicit list or a function:
-
-```lua
--- Static list
-require("citeref").setup({
-  bib_files = {
-    "~/papers/refs.bib",
-    "~/Documents/zotero.bib",
-  },
+  bib_files = { "/path/to/you/library.bib" },
 })
 
 -- Dynamic: re-evaluated every time a picker opens
@@ -220,18 +202,39 @@ require("citeref").setup({
 
 ## Cross-references
 
-The cross-reference picker (`crossref_figure`, `crossref_table`) scans R/Quarto
-code chunks labelled as:
+The crossref pickers (`crossref_figure`, `crossref_table`) scan R/Quarto code chunks in:
 
-```markdown
-```{r fig-myplot, fig.cap="..."}
+1. The **current buffer**
+2. All `*.{rmd,Rmd,qmd,Qmd}` files in the same directory
+
+Named chunks are available for insertion as `\@ref(fig:label)` or `\@ref(tab:label)`. Unnamed chunks are shown in the list but cannot be cross-referenced — add a label to use them. Note that all chunks are available to insert as `fig` or `tab` - is up to you to decide which one is the appropriate.
+
+````markdown
+```{r myplot, fig.cap="My caption"}
+# this chunk can be referenced as \@ref(fig:myplot)
+
+```{r}
+# unnamed – cannot be cross-referenced
+````
+
+---
+
+## Programmatic API
+
+```lua
+local citeref = require("citeref")
+
+citeref.cite_markdown()   -- insert @key
+citeref.cite_latex()      -- insert \cite{key}
+citeref.cite_replace()    -- replace citation key under cursor (fzf-lua only)
+citeref.crossref_figure() -- insert \@ref(fig:label)
+citeref.crossref_table()  -- insert \@ref(tab:label)
+
+citeref.debug()           -- print attachment and keymap status for current buffer
 ```
-
-It searches the **current buffer** first, then all `*.{rmd,Rmd,qmd,Qmd}` files
-in the same directory.  Non-current-file results are shown with their filename.
 
 ---
 
 ## License
 
-GNU General Public License v3.0
+GNU General Public License v3.0 — see [LICENSE](LICENSE).

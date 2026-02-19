@@ -108,36 +108,37 @@ local function citation_items(format)
   return items
 end
 
---- Parse chunk labels from the current buffer (named chunks only).
----@return string[]
-local function chunk_labels()
-  local lines  = vim.api.nvim_buf_get_lines(0, 0, -1, false)
-  local labels = {}
-  for i, line in ipairs(lines) do
-    if line:match("^```{r") then
-      local label
-      if not (line:match("^```{r%s*}") or line:match("^```{r%s*,")) then
-        label = line:match("^```{r%s+([^%s,}]+)")
-      end
-      if label then
-        labels[#labels+1] = { label = label, line = i }
-      end
-    end
-  end
-  return labels
+--- Get all chunks via crossref module (current buf + sibling files, named + unnamed).
+--- Returns only named chunks for insertion (unnamed can't be cross-referenced),
+--- but shows them in the list with a clear label so the user knows they exist.
+---@return CiterefChunk[]
+local function get_all_chunks()
+  local ok, crossref = pcall(require, "citeref.crossref")
+  if not ok then return {} end
+  return crossref.all_chunks()
 end
 
 ---@return table[]
 local function crossref_fig_items()
   local items = {}
-  for _, c in ipairs(chunk_labels()) do
-    local insert = "\\@ref(fig:" .. c.label .. ")"
+  for _, c in ipairs(get_all_chunks()) do
+    local insert, detail, kind_val
+    if c.label == "" then
+      -- Unnamed chunk: show it but mark as unusable for crossref
+      insert   = "[unnamed chunk · line " .. c.line .. " · " .. vim.fn.fnamemodify(c.file, ":t") .. "]"
+      detail   = "⚠ needs a label to use in \\@ref(fig:...)"
+      kind_val = KIND.Field  -- distinct kind so user can see it's different
+    else
+      insert   = "\\@ref(fig:" .. c.label .. ")"
+      detail   = "figure · line " .. c.line .. (c.is_current and "" or " · " .. vim.fn.fnamemodify(c.file, ":t"))
+      kind_val = KIND.Value
+    end
     items[#items+1] = {
       label      = insert,
-      kind       = KIND.Value,
-      detail     = "figure · line " .. c.line,
-      insertText = insert,
-      data       = { type = "crossref_fig", label = c.label, line = c.line },
+      kind       = kind_val,
+      detail     = detail,
+      insertText = c.label ~= "" and insert or "",  -- don't insert anything for unnamed
+      data       = { type = "crossref_fig", label = c.label, line = c.line, file = c.file },
     }
   end
   return items
@@ -146,14 +147,23 @@ end
 ---@return table[]
 local function crossref_tab_items()
   local items = {}
-  for _, c in ipairs(chunk_labels()) do
-    local insert = "\\@ref(tab:" .. c.label .. ")"
+  for _, c in ipairs(get_all_chunks()) do
+    local insert, detail, kind_val
+    if c.label == "" then
+      insert   = "[unnamed chunk · line " .. c.line .. " · " .. vim.fn.fnamemodify(c.file, ":t") .. "]"
+      detail   = "⚠ needs a label to use in \\@ref(tab:...)"
+      kind_val = KIND.Reference
+    else
+      insert   = "\\@ref(tab:" .. c.label .. ")"
+      detail   = "table · line " .. c.line .. (c.is_current and "" or " · " .. vim.fn.fnamemodify(c.file, ":t"))
+      kind_val = KIND.Field
+    end
     items[#items+1] = {
       label      = insert,
-      kind       = KIND.Field,
-      detail     = "table · line " .. c.line,
-      insertText = insert,
-      data       = { type = "crossref_tab", label = c.label, line = c.line },
+      kind       = kind_val,
+      detail     = detail,
+      insertText = c.label ~= "" and insert or "",
+      data       = { type = "crossref_tab", label = c.label, line = c.line, file = c.file },
     }
   end
   return items
@@ -203,12 +213,11 @@ function BlinkSource:get_completions(ctx, callback)
 end
 
 function BlinkSource:enabled()
-  local ok, cfg_mod = pcall(require, "citeref.config")
-  if not ok then return false end
-  local cfg    = cfg_mod.get()
-  local ft_set = {}
-  for _, ft in ipairs(cfg.filetypes) do ft_set[ft] = true end
-  return ft_set[vim.bo.filetype] == true
+  -- Always return true here. Filetype scoping is handled by blink.cmp's own
+  -- per_filetype config (see README). If the user adds "citeref" only to
+  -- per_filetype.markdown etc., blink will only call this source in those
+  -- filetypes. A filetype check here would conflict with that.
+  return true
 end
 
 -- ─────────────────────────────────────────────────────────────
@@ -227,12 +236,8 @@ function CmpSource:get_trigger_characters()
 end
 
 function CmpSource:is_available()
-  local ok, cfg_mod = pcall(require, "citeref.config")
-  if not ok then return false end
-  local cfg    = cfg_mod.get()
-  local ft_set = {}
-  for _, ft in ipairs(cfg.filetypes) do ft_set[ft] = true end
-  return ft_set[vim.bo.filetype] == true
+  -- Always true; filetype scoping is handled by nvim-cmp's filetype source config.
+  return true
 end
 
 function CmpSource:complete(_, callback)

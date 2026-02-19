@@ -117,7 +117,7 @@ local function parse_chunks_from_file(filepath)
 end
 
 ---@return CiterefChunk[]
-local function all_chunks()
+function M.all_chunks()
   local bufnr    = vim.api.nvim_get_current_buf()
   local cur_file = vim.api.nvim_buf_get_name(bufnr)
   local cur_dir  = vim.fn.fnamemodify(cur_file, ":h")
@@ -165,7 +165,7 @@ end
 
 ---@param ref_type "fig"|"tab"
 function M.pick(ref_type)
-  local chunks = all_chunks()
+  local chunks = M.all_chunks()
   if #chunks == 0 then
     vim.notify("citeref: no code chunks found", vim.log.levels.WARN)
     return
