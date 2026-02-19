@@ -43,8 +43,15 @@ M.defaults = {
     "latex",
   },
 
-  -- By default we look for ~/Documents/zotero.bib + any *.bib in cwd.
-  -- Users can supply an explicit list or a callable.
+  -- Extra bib file(s) to search for citations, on top of any *.bib found in cwd.
+  -- cwd is always scanned automatically; this just adds more sources.
+  -- Accepts:
+  --   nil            → cwd only  (default)
+  --   string[]       → paths added to cwd results (~ expanded, missing files warned)
+  --   fun():string[] → called each time a picker opens (dynamic resolution)
+  --
+  -- Example – always include your Zotero library:
+  --   bib_files = { "~/Documents/zotero.bib" }
   bib_files = nil,
 
   keymaps = {

@@ -10,28 +10,42 @@ local M = {}
 
 ---@return string[]
 local function resolve_bib_files()
-  local cfg = config.get()
-
-  if cfg.bib_files then
-    if type(cfg.bib_files) == "function" then
-      return cfg.bib_files()
-    end
-    return cfg.bib_files
-  end
-
-  -- Default: zotero.bib in ~/Documents + any *.bib in cwd
-  local zotero   = vim.fn.expand("~/Documents/zotero.bib")
-  local cwd_bibs = vim.fn.globpath(vim.fn.getcwd(), "*.bib", false, true)
-
+  local cfg   = config.get()
+  local seen  = {}
   local files = {}
-  if vim.fn.filereadable(zotero) == 1 then
-    table.insert(files, zotero)
-  end
-  for _, b in ipairs(cwd_bibs) do
-    if b ~= zotero then
-      table.insert(files, b)
+
+  local function add(path)
+    local expanded = vim.fn.expand(path)
+    if seen[expanded] then return end
+    seen[expanded] = true
+    if vim.fn.filereadable(expanded) == 1 then
+      files[#files+1] = expanded
+    else
+      vim.notify("citeref: bib file not found: " .. expanded, vim.log.levels.WARN)
     end
   end
+
+  -- 1. Explicitly configured files (or function returning them)
+  if cfg.bib_files then
+    local configured = type(cfg.bib_files) == "function"
+      and cfg.bib_files()
+      or  cfg.bib_files
+    for _, f in ipairs(configured) do add(f) end
+  end
+
+  -- 2. Any *.bib in cwd (always, regardless of config)
+  for _, f in ipairs(vim.fn.globpath(vim.fn.getcwd(), "*.bib", false, true)) do
+    add(f)
+  end
+
+  if #files == 0 then
+    vim.notify(
+      "citeref: no .bib files found.\n"
+      .. "  Put a .bib file in the current directory, or set bib_files in setup().",
+      vim.log.levels.WARN
+    )
+  end
+
   return files
 end
 
@@ -245,13 +259,15 @@ function M.pick(format)
   format = format or "markdown"
 
   local bib_files = resolve_bib_files()
-  local entries   = {}
+  if #bib_files == 0 then return end  -- resolve_bib_files() already warned
+
+  local entries = {}
   for _, path in ipairs(bib_files) do
     vim.list_extend(entries, M.parse_bib(path))
   end
 
   if #entries == 0 then
-    vim.notify("citeref: no citations found in bib files", vim.log.levels.WARN)
+    vim.notify("citeref: bib files found but no entries could be parsed", vim.log.levels.WARN)
     return
   end
 
@@ -322,12 +338,14 @@ function M.replace()
   end
 
   local bib_files = resolve_bib_files()
-  local entries   = {}
+  if #bib_files == 0 then return end  -- resolve_bib_files() already warned
+
+  local entries = {}
   for _, path in ipairs(bib_files) do
     vim.list_extend(entries, M.parse_bib(path))
   end
   if #entries == 0 then
-    vim.notify("citeref: no citations found in bib files", vim.log.levels.WARN)
+    vim.notify("citeref: bib files found but no entries could be parsed", vim.log.levels.WARN)
     return
   end
 
