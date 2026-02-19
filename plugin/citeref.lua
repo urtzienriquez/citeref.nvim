@@ -1,31 +1,28 @@
 --- plugin/citeref.lua
 ---
---- This file is sourced automatically by Neovim at startup because it lives in
---- the plugin/ directory.  It MUST stay lightweight: all it does is register a
---- FileType autocommand.  The heavy modules (citation, crossref, fzf-lua …) are
---- required only when a matching buffer is opened – that IS the lazy-loading.
+--- Sourced at startup by Neovim. Kept intentionally minimal — just registers
+--- the FileType autocommand that attaches citeref to matching buffers.
 ---
---- Users do NOT need to call require("citeref").setup() for the plugin to work.
---- setup() exists only to override defaults.
+--- When used with lazy.nvim, pair this with an ft = {...} trigger in your spec
+--- so that the lua/ modules are not loaded until a matching file is opened:
+---
+---   { dir = "~/path/to/citeref.nvim",
+---     ft  = { "markdown", "rmd", "quarto", "rnoweb", "pandoc", "tex", "latex" },
+---     dependencies = { "ibhagwan/fzf-lua" } }
+---
+--- The ft trigger makes lazy.nvim fire a FileType event for the first matching
+--- buffer, which our autocommand below then picks up — no re-trigger needed.
 
--- Guard: only register once even if rtp contains the plugin twice.
 if vim.g.loaded_citeref then return end
 vim.g.loaded_citeref = true
 
--- vim.schedule defers registration until after the plugin manager (e.g.
--- lazy.nvim) has finished setting up the runtimepath.  Without this, dev
--- plugins whose lua/ directory is added to rtp late would fail to require
--- their own modules if any event fires during startup before rtp is ready.
 vim.schedule(function()
   vim.api.nvim_create_autocmd("FileType", {
-    -- pattern = "*" so the filetype list can be changed by setup() at any time
-    -- without having to re-register the autocmd.
     pattern  = "*",
     group    = vim.api.nvim_create_augroup("citeref", { clear = true }),
     callback = function(ev)
-      -- All requires happen here, inside the callback, never at file-source time.
       local ok_cfg, cfg_mod = pcall(require, "citeref.config")
-      if not ok_cfg then return end  -- rtp not ready yet (shouldn't happen after schedule)
+      if not ok_cfg then return end
 
       local cfg    = cfg_mod.get()
       local ft_set = {}
@@ -39,15 +36,4 @@ vim.schedule(function()
       end
     end,
   })
-
-  -- Re-trigger FileType for any buffers that were opened before our autocmd
-  -- was registered (e.g. the first file opened by `nvim somefile.md`).
-  for _, buf in ipairs(vim.api.nvim_list_bufs()) do
-    if vim.api.nvim_buf_is_loaded(buf) then
-      local ft = vim.bo[buf].filetype
-      if ft and ft ~= "" then
-        vim.api.nvim_exec_autocmds("FileType", { buffer = buf, modeline = false })
-      end
-    end
-  end
 end)
