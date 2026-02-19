@@ -25,25 +25,8 @@ A Neovim plugin for inserting **citations** (from `.bib` files) and **cross-refe
 ```lua
 {
   "urtzienriquez/citeref.nvim",
-  ft  = { "markdown", "rmd", "quarto", "rnoweb", "pandoc", "tex", "latex" },
-  dependencies = { "ibhagwan/fzf-lua" },
-}
-```
-
-The `ft` trigger tells lazy.nvim to load the plugin (add `lua/` to rtp and fire
-the first FileType event) only when you open a matching file. The `plugin/`
-entry point is sourced at startup but is intentionally near-empty — no modules
-are required, no keymaps are set — so there is no cost until you actually open a
-relevant file.
-
-If you use `setup()` to customise options, call it before any matching file is
-opened (e.g. in your lazy `config` callback):
-
-```lua
-{
-  "urtzienriquez/citeref.nvim",
-  ft   = { "markdown", "rmd", "quarto", "rnoweb", "pandoc", "tex", "latex" },
-  dependencies = { "ibhagwan/fzf-lua" },
+  ft           = { "markdown", "rmd", "quarto", "rnoweb", "pandoc", "tex", "latex" },
+  dependencies = { "ibhagwan/fzf-lua" },  -- optional but preferred
   config = function()
     require("citeref").setup({
       bib_files = { "~/Documents/zotero.bib" },
@@ -51,6 +34,49 @@ opened (e.g. in your lazy `config` callback):
   end,
 }
 ```
+
+`fzf-lua` is optional. If not present, keymaps fall back to forcing the
+completion menu open via **blink.cmp** (preferred) or **nvim-cmp**.
+
+### Completion source (blink.cmp)
+
+Add `"citeref"` to your blink.cmp sources so citations appear automatically
+when you type `@`, and are also available via the forced-menu keymaps:
+
+```lua
+-- in your blink.cmp config:
+sources = {
+  default = { "lsp", "path", "snippets", "buffer", "citeref" },
+  providers = {
+    citeref = {
+      name   = "citeref",
+      module = "citeref.completion",
+    },
+  },
+  -- or per-filetype only:
+  per_filetype = {
+    markdown = { inherit_defaults = true, "citeref" },
+    rmd      = { inherit_defaults = true, "citeref" },
+    quarto   = { inherit_defaults = true, "citeref" },
+  },
+},
+```
+
+### Completion source (nvim-cmp)
+
+***Untested! Experimental!***
+
+```lua
+-- in your nvim-cmp config:
+sources = cmp.config.sources({
+  { name = "nvim_lsp" },
+  { name = "citeref" },
+  -- ...
+})
+```
+
+nvim-cmp sources are registered automatically when citeref attaches to a
+buffer — no extra configuration needed beyond adding `{ name = "citeref" }`.
 
 ---
 

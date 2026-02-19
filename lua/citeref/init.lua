@@ -1,62 +1,115 @@
 --- citeref.nvim
 --- A citation and cross-reference picker for Neovim.
 ---
---- Usage (optional – the plugin works without calling setup):
+--- fzf-lua is used when available; otherwise keymaps fall back to
+--- forcing the completion menu open via blink.cmp or nvim-cmp.
+---
+--- Optional setup() – sane defaults apply without calling it:
 ---
 ---   require("citeref").setup({
----     filetypes  = { "markdown", "quarto", "tex" },
----     bib_files  = { "~/my-library.bib" },
+---     filetypes  = { "markdown", "rmd", "quarto", "rnoweb", "pandoc", "tex", "latex" },
+---     bib_files  = { "~/Documents/zotero.bib" },
 ---     keymaps    = {
 ---       enabled           = true,
----       cite_markdown_i   = "<C-a>m",     -- insert mode
----       cite_markdown_n   = "<leader>am", -- normal mode
+---       cite_markdown_i   = "<C-a>m",
+---       cite_markdown_n   = "<leader>am",
 ---       cite_latex_i      = "<C-a>l",
 ---       cite_latex_n      = "<leader>al",
----       cite_replace_n    = "<leader>ar", -- normal only
+---       cite_replace_n    = "<leader>ar",
 ---       crossref_figure_i = "<C-a>f",
 ---       crossref_figure_n = "<leader>af",
 ---       crossref_table_i  = "<C-a>t",
 ---       crossref_table_n  = "<leader>at",
----       -- set any key to false to disable just that mapping
 ---     },
 ---   })
 
 local M = {}
 
 -- ─────────────────────────────────────────────────────────────
--- Public API – lazily loaded modules
+-- Backend detection (fzf-lua preferred, completion fallback)
 -- ─────────────────────────────────────────────────────────────
 
---- Insert a markdown-style citation (@key).
-function M.cite_markdown()   require("citeref.citation").pick_markdown() end
+local _has_fzf = nil
 
---- Insert a LaTeX-style citation (\cite{key}).
-function M.cite_latex()      require("citeref.citation").pick_latex()    end
+local function has_fzf()
+  if _has_fzf == nil then
+    _has_fzf = pcall(require, "fzf-lua")
+  end
+  return _has_fzf
+end
 
---- Replace the citation key under the cursor.
-function M.cite_replace()    require("citeref.citation").replace()       end
+-- ─────────────────────────────────────────────────────────────
+-- Public API
+-- Each function picks the right backend at call time.
+-- ─────────────────────────────────────────────────────────────
 
---- Insert a figure cross-reference (\@ref(fig:label)).
-function M.crossref_figure() require("citeref.crossref").pick_figure()   end
+function M.cite_markdown()
+  if has_fzf() then
+    require("citeref.citation").pick_markdown()
+  else
+    local mode = vim.api.nvim_get_mode().mode
+    if mode:find("i") then
+      require("citeref.completion").show_citations_markdown()
+    else
+      vim.notify("citeref: cite_markdown in normal mode requires fzf-lua", vim.log.levels.WARN)
+    end
+  end
+end
 
---- Insert a table cross-reference (\@ref(tab:label)).
-function M.crossref_table()  require("citeref.crossref").pick_table()    end
+function M.cite_latex()
+  if has_fzf() then
+    require("citeref.citation").pick_latex()
+  else
+    local mode = vim.api.nvim_get_mode().mode
+    if mode:find("i") then
+      require("citeref.completion").show_citations_latex()
+    else
+      vim.notify("citeref: cite_latex in normal mode requires fzf-lua", vim.log.levels.WARN)
+    end
+  end
+end
+
+function M.cite_replace()
+  if has_fzf() then
+    require("citeref.citation").replace()
+  else
+    vim.notify("citeref: cite_replace requires fzf-lua", vim.log.levels.WARN)
+  end
+end
+
+function M.crossref_figure()
+  if has_fzf() then
+    require("citeref.crossref").pick_figure()
+  else
+    local mode = vim.api.nvim_get_mode().mode
+    if mode:find("i") then
+      require("citeref.completion").show_crossref_fig()
+    else
+      vim.notify("citeref: crossref_figure in normal mode requires fzf-lua", vim.log.levels.WARN)
+    end
+  end
+end
+
+function M.crossref_table()
+  if has_fzf() then
+    require("citeref.crossref").pick_table()
+  else
+    local mode = vim.api.nvim_get_mode().mode
+    if mode:find("i") then
+      require("citeref.completion").show_crossref_tab()
+    else
+      vim.notify("citeref: crossref_table in normal mode requires fzf-lua", vim.log.levels.WARN)
+    end
+  end
+end
 
 -- ─────────────────────────────────────────────────────────────
 -- Keymap helpers
 -- ─────────────────────────────────────────────────────────────
 
---- Set a buffer-local keymap only when the user hasn't already mapped the key
---- in this buffer (respects user overrides set before or after attach).
----@param modes string|string[]
----@param lhs string
----@param rhs function|string
----@param desc string
 local function set_keymap_if_free(modes, lhs, rhs, desc)
   if type(modes) == "string" then modes = { modes } end
   for _, mode in ipairs(modes) do
-    -- Check whether the user has mapped this key in the buffer already.
-    -- nvim_buf_get_keymap returns an empty table when nothing is mapped.
     local existing = vim.api.nvim_buf_get_keymap(0, mode)
     local occupied = false
     for _, km in ipairs(existing) do
@@ -68,48 +121,34 @@ local function set_keymap_if_free(modes, lhs, rhs, desc)
   end
 end
 
---- Install buffer-local keymaps according to the resolved config.
---- Mirrors exactly the pattern from keymaps.lua:
----   insert-mode  <C-a>X  →  open picker, insert, stay in insert
----   normal-mode  <leader>aX → open picker, insert, stay in normal
 local function set_keymaps()
   local cfg = require("citeref.config").get()
   local km  = cfg.keymaps
-
   if not km.enabled then return end
 
   local map = set_keymap_if_free
 
-  -- Citations – markdown (@key)
   if km.cite_markdown_i then
     map("i", km.cite_markdown_i, M.cite_markdown, "citeref: insert citation (markdown)")
   end
   if km.cite_markdown_n then
     map("n", km.cite_markdown_n, M.cite_markdown, "citeref: insert citation (markdown)")
   end
-
-  -- Citations – LaTeX (\cite{key})
   if km.cite_latex_i then
     map("i", km.cite_latex_i, M.cite_latex, "citeref: insert citation (LaTeX)")
   end
   if km.cite_latex_n then
     map("n", km.cite_latex_n, M.cite_latex, "citeref: insert citation (LaTeX)")
   end
-
-  -- Replace citation under cursor (normal only – cursor must be on a key)
   if km.cite_replace_n then
     map("n", km.cite_replace_n, M.cite_replace, "citeref: replace citation under cursor")
   end
-
-  -- Cross-references – figure
   if km.crossref_figure_i then
     map("i", km.crossref_figure_i, M.crossref_figure, "citeref: insert figure crossref")
   end
   if km.crossref_figure_n then
     map("n", km.crossref_figure_n, M.crossref_figure, "citeref: insert figure crossref")
   end
-
-  -- Cross-references – table
   if km.crossref_table_i then
     map("i", km.crossref_table_i, M.crossref_table, "citeref: insert table crossref")
   end
@@ -119,13 +158,11 @@ local function set_keymaps()
 end
 
 -- ─────────────────────────────────────────────────────────────
--- Attach – called per buffer when the filetype matches
+-- Attach
 -- ─────────────────────────────────────────────────────────────
 
 local attached_bufs = {}
 
---- Attach citeref to the current buffer: install keymaps and mark it attached.
---- Idempotent – safe to call multiple times on the same buffer.
 function M.attach()
   local buf = vim.api.nvim_get_current_buf()
   if attached_bufs[buf] then return end
@@ -133,7 +170,9 @@ function M.attach()
 
   set_keymaps()
 
-  -- Clean up when the buffer is deleted
+  -- Register completion source once (idempotent inside register())
+  require("citeref.completion").register()
+
   vim.api.nvim_create_autocmd("BufDelete", {
     buffer   = buf,
     once     = true,
@@ -141,7 +180,10 @@ function M.attach()
   })
 end
 
---- Print attachment and keymap status for the current buffer. Useful for debugging.
+-- ─────────────────────────────────────────────────────────────
+-- Debug
+-- ─────────────────────────────────────────────────────────────
+
 function M.debug()
   local buf = vim.api.nvim_get_current_buf()
   local ft  = vim.bo[buf].filetype
@@ -149,51 +191,40 @@ function M.debug()
 
   print(string.format("citeref debug — buf=%d  ft=%q  attached=%s",
     buf, ft, tostring(attached_bufs[buf] == true)))
+  print("Backend: " .. (has_fzf() and "fzf-lua" or "completion (blink/cmp)"))
   print("Active filetypes: " .. table.concat(cfg.filetypes, ", "))
 
-  local km = vim.api.nvim_buf_get_keymap(buf, "n")
   local found = {}
-  for _, k in ipairs(km) do
-    if k.desc and k.desc:match("^citeref:") then
-      found[#found+1] = string.format("  n  %s  →  %s", k.lhs, k.desc)
-    end
-  end
-  local kmi = vim.api.nvim_buf_get_keymap(buf, "i")
-  for _, k in ipairs(kmi) do
-    if k.desc and k.desc:match("^citeref:") then
-      found[#found+1] = string.format("  i  %s  →  %s", k.lhs, k.desc)
+  for _, mode in ipairs({ "n", "i" }) do
+    for _, k in ipairs(vim.api.nvim_buf_get_keymap(buf, mode)) do
+      if k.desc and k.desc:match("^citeref:") then
+        found[#found+1] = string.format("  %s  %s  →  %s", mode, k.lhs, k.desc)
+      end
     end
   end
   if #found == 0 then
     print("No citeref keymaps found in this buffer.")
   else
-    print("citeref keymaps in this buffer:")
+    print("citeref keymaps:")
     for _, l in ipairs(found) do print(l) end
   end
 end
 
 -- ─────────────────────────────────────────────────────────────
--- setup() – optional user configuration
+-- setup()
 -- ─────────────────────────────────────────────────────────────
 
---- Configure citeref. All options are optional; sane defaults apply without
---- calling this function at all.
----@param opts? table
 function M.setup(opts)
   require("citeref.config").set(opts)
 
-  -- If the user calls setup() after some buffers have already attached
-  -- (e.g. fast startup), re-trigger attachment logic for currently open
-  -- relevant buffers.
-  local cfg       = require("citeref.config").get()
-  local ft_set    = {}
+  local cfg    = require("citeref.config").get()
+  local ft_set = {}
   for _, ft in ipairs(cfg.filetypes) do ft_set[ft] = true end
 
   for _, buf in ipairs(vim.api.nvim_list_bufs()) do
     if vim.api.nvim_buf_is_loaded(buf) then
       local ft = vim.bo[buf].filetype
       if ft_set[ft] and not attached_bufs[buf] then
-        -- Switch context, attach, restore
         local cur_win = vim.api.nvim_get_current_win()
         local wins    = vim.fn.win_findbuf(buf)
         if #wins > 0 then
