@@ -25,6 +25,12 @@ local M = {}
 
 ---@type CiterefConfig
 M.defaults = {
+  -- Backend to use for picking and inserting.
+  -- "fzf"   → fzf-lua (full picker with preview, works in insert + normal mode)
+  -- "blink" → blink.cmp completion menu (insert mode only)
+  -- "cmp"   → nvim-cmp completion menu (insert mode only)
+  -- nil     → auto-detect at first use (fzf > blink > cmp)
+  backend = nil,
   -- Neovim filetype values (always lowercase) for the file extensions you care about:
   --   .md / .markdown  → "markdown"
   --   .Rmd / .rmd      → "rmd"

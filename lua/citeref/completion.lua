@@ -5,21 +5,17 @@
 local M = {}
 
 -- ─────────────────────────────────────────────────────────────
--- Detect available completion engine (once, at first call)
+-- Backend (reads config – no auto-detection)
 -- ─────────────────────────────────────────────────────────────
 
-local _engine = nil  -- "blink" | "cmp" | "none"
-
 local function engine()
-  if _engine then return _engine end
-  if pcall(require, "blink.cmp") then
-    _engine = "blink"
-  elseif pcall(require, "cmp") then
-    _engine = "cmp"
-  else
-    _engine = "none"
+  local backend = require("citeref.config").get().backend
+  if backend == "blink" or backend == "cmp" then return backend end
+  if backend == nil then
+    if pcall(require, "blink.cmp") then return "blink" end
+    if pcall(require, "cmp")       then return "cmp"   end
   end
-  return _engine
+  return "none"
 end
 
 -- ─────────────────────────────────────────────────────────────
@@ -253,6 +249,7 @@ end
 -- ─────────────────────────────────────────────────────────────
 
 local function trigger_menu()
+  M.register()  -- no-op if already registered
   local e = engine()
   if e == "blink" then
     require("blink.cmp").show({ providers = { "citeref" } })
