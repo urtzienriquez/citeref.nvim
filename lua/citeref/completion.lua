@@ -201,6 +201,15 @@ function BlinkSource:get_trigger_characters()
 end
 
 function BlinkSource:get_completions(ctx, callback)
+  local before = ctx.line:sub(1, ctx.cursor[2])
+  if not before:match("@[%w_%-:%.]*$") then
+    callback({
+      items                  = {},
+      is_incomplete_forward  = false,
+      is_incomplete_backward = false,
+    })
+    return
+  end
   callback({
     items                  = current_items(),
     is_incomplete_forward  = false,
