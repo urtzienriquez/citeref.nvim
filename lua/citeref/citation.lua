@@ -222,8 +222,8 @@ function M.get_citation_under_cursor()
         while true do
           local ks, ke = inside:find("[^,%s]+", isp)
           if not ks then break end
-          local abs_s = bo + ks - 1
-          local abs_e = bo + ke - 1
+          local abs_s = bo + ks  -- bo is the '{', key starts one after
+          local abs_e = bo + ke
           if col >= abs_s - 1 and col <= abs_e - 1 then
             local all_keys = {}
             for k in inside:gmatch("[^,%s]+") do all_keys[#all_keys+1] = k end
@@ -338,7 +338,7 @@ function M.replace()
   end
 
   local bib_files = resolve_bib_files()
-  if #bib_files == 0 then return end  -- resolve_bib_files() already warned
+  if #bib_files == 0 then return end
 
   local entries = {}
   for _, path in ipairs(bib_files) do
@@ -349,7 +349,10 @@ function M.replace()
     return
   end
 
-  local ctx    = util.save_context()
+  -- Capture buf and row NOW, before fzf opens.
+  local buf = vim.api.nvim_get_current_buf()
+  local row = vim.api.nvim_win_get_cursor(0)[1]  -- 1-indexed
+
   local lookup = {}
 
   require("fzf-lua").fzf_exec(function(cb)
@@ -375,33 +378,20 @@ function M.replace()
           return
         end
 
-        if not vim.api.nvim_buf_is_valid(ctx.buf) then return end
-        if ctx.win and vim.api.nvim_win_is_valid(ctx.win) then
-          pcall(vim.api.nvim_set_current_win, ctx.win)
-        end
-        pcall(vim.api.nvim_set_current_buf, ctx.buf)
-
         local replacement = info.style == "latex" and e.key or ("@" .. e.key)
-        local ok = pcall(function()
-          vim.api.nvim_buf_set_text(
-            ctx.buf, ctx.row - 1,
-            info.start_col, info.end_col + 1,
-            { replacement }
-          )
-        end)
-        if ok then
-          util.set_cursor_after(ctx.buf, ctx.win, ctx.row, info.start_col, replacement)
-          if ctx.was_insert_mode then
-            util.reenter_insert(ctx.buf, ctx.win, ctx.row, info.start_col, #replacement)
-          end
-          vim.defer_fn(function()
+
+        -- nvim_buf_set_text works on any valid buf — no need to switch windows.
+        local ok, err = pcall(
+          vim.api.nvim_buf_set_text,
+          buf, row - 1, info.start_col, row - 1, info.end_col + 1, { replacement }
+        )
+        vim.defer_fn(function()
+          if ok then
             vim.notify(string.format("citeref: %s → %s", info.key, e.key), vim.log.levels.INFO)
-          end, 100)
-        else
-          vim.defer_fn(function()
-            vim.notify("citeref: replacement failed", vim.log.levels.ERROR)
-          end, 100)
-        end
+          else
+            vim.notify("citeref: replacement failed – " .. tostring(err), vim.log.levels.ERROR)
+          end
+        end, 100)
       end,
     },
   })
