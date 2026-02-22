@@ -1,6 +1,8 @@
 # citeref.nvim
 
-A Neovim plugin for inserting **citations** (from `.bib` files) and **cross-references** (to R/Quarto code chunks).
+> A Neovim plugin for inserting **citations** (from `.bib` files) and **cross-references** (to R/Quarto code chunks).
+
+Contributions are very welcomed! See [Contributing](#contributing)
 
 ---
 
