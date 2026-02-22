@@ -16,6 +16,9 @@ local function entry_previewer()
         self.state.bufnr, 0, -1, false,
         vim.split(parse.entry_preview(entry.value), "\n")
       )
+      if self.state.winid and vim.api.nvim_win_is_valid(self.state.winid) then
+        vim.wo[self.state.winid].wrap = true
+      end
     end,
   })
 end
