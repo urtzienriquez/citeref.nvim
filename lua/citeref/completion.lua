@@ -53,7 +53,6 @@ local function citation_items(format)
   local ok, citation = pcall(require, "citeref.citation")
   if not ok then return {} end
 
-  -- Resolve bib files (same logic as citation.lua but without side-effect warnings)
   local bib_files = {}
   local seen      = {}
   local function add(path)
@@ -104,9 +103,6 @@ local function citation_items(format)
   return items
 end
 
---- Get all chunks via crossref module (current buf + sibling files, named + unnamed).
---- Returns only named chunks for insertion (unnamed can't be cross-referenced),
---- but shows them in the list with a clear label so the user knows they exist.
 ---@return CiterefChunk[]
 local function get_all_chunks()
   local ok, crossref = pcall(require, "citeref.crossref")
@@ -120,10 +116,9 @@ local function crossref_fig_items()
   for _, c in ipairs(get_all_chunks()) do
     local insert, detail, kind_val
     if c.label == "" then
-      -- Unnamed chunk: show it but mark as unusable for crossref
       insert   = "[unnamed chunk · line " .. c.line .. " · " .. vim.fn.fnamemodify(c.file, ":t") .. "]"
       detail   = "⚠ needs a label to use in \\@ref(fig:...)"
-      kind_val = KIND.Field  -- distinct kind so user can see it's different
+      kind_val = KIND.Field
     else
       insert   = "\\@ref(fig:" .. c.label .. ")"
       detail   = "figure · line " .. c.line .. (c.is_current and "" or " · " .. vim.fn.fnamemodify(c.file, ":t"))
@@ -133,7 +128,7 @@ local function crossref_fig_items()
       label      = insert,
       kind       = kind_val,
       detail     = detail,
-      insertText = c.label ~= "" and insert or "",  -- don't insert anything for unnamed
+      insertText = c.label ~= "" and insert or "",
       data       = { type = "crossref_fig", label = c.label, line = c.line, file = c.file },
     }
   end
@@ -165,7 +160,6 @@ local function crossref_tab_items()
   return items
 end
 
---- Return items appropriate for the current mode/format state.
 ---@return table[]
 local function current_items()
   local mode = _current_mode
@@ -176,7 +170,6 @@ local function current_items()
   elseif mode == "crossref_tab" then
     return crossref_tab_items()
   else
-    -- "all" – auto-triggered via @; show citations (markdown) + both crossref types
     local items = {}
     vim.list_extend(items, citation_items("markdown"))
     vim.list_extend(items, crossref_fig_items())
@@ -200,6 +193,10 @@ function BlinkSource:get_trigger_characters()
   return { "@" }
 end
 
+-- Drop the @ guard entirely — blink controls when to call this via
+-- get_trigger_characters() and per_filetype config. The guard was
+-- preventing items from appearing during normal (non-@ triggered) calls
+-- such as when the user opens the menu manually with a keymap.
 function BlinkSource:get_completions(ctx, callback)
   local before = ctx.line:sub(1, ctx.cursor[2])
   if not before:match("@[%w_%-:%.]*$") then
@@ -218,10 +215,6 @@ function BlinkSource:get_completions(ctx, callback)
 end
 
 function BlinkSource:enabled()
-  -- Always return true here. Filetype scoping is handled by blink.cmp's own
-  -- per_filetype config (see README). If the user adds "citeref" only to
-  -- per_filetype.markdown etc., blink will only call this source in those
-  -- filetypes. A filetype check here would conflict with that.
   return true
 end
 
@@ -241,11 +234,15 @@ function CmpSource:get_trigger_characters()
 end
 
 function CmpSource:is_available()
-  -- Always true; filetype scoping is handled by nvim-cmp's filetype source config.
   return true
 end
 
-function CmpSource:complete(_, callback)
+function CmpSource:complete(request, callback)
+  local before = request.context.cursor_before_line
+  if not before:match("@[%w_%-:%.]*$") then
+    callback({ items = {}, isIncomplete = false })
+    return
+  end
   callback({ items = current_items(), isIncomplete = false })
 end
 
@@ -258,7 +255,7 @@ end
 -- ─────────────────────────────────────────────────────────────
 
 local function trigger_menu()
-  M.register()  -- no-op if already registered
+  M.register()
   local e = engine()
   if e == "blink" then
     require("blink.cmp").show({ providers = { "citeref" } })
@@ -283,28 +280,24 @@ local function trigger_menu()
   end
 end
 
---- Open menu with citation items in markdown (@key) format.
 function M.show_citations_markdown()
   _current_mode   = "citation"
   _current_format = "markdown"
   trigger_menu()
 end
 
---- Open menu with citation items in LaTeX (\cite{key}) format.
 function M.show_citations_latex()
   _current_mode   = "citation"
   _current_format = "latex"
   trigger_menu()
 end
 
---- Open menu with figure crossref items only (\@ref(fig:...)).
 function M.show_crossref_fig()
   _current_mode   = "crossref_fig"
   _current_format = "markdown"
   trigger_menu()
 end
 
---- Open menu with table crossref items only (\@ref(tab:...)).
 function M.show_crossref_tab()
   _current_mode   = "crossref_tab"
   _current_format = "markdown"
@@ -335,7 +328,6 @@ function M.register()
   end
 end
 
---- blink.cmp calls this when module = "citeref.completion"
 function M.new()
   return BlinkSource.new()
 end
