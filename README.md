@@ -319,6 +319,20 @@ citeref.debug()              -- print backend, attachment status, and active key
 
 ---
 
+## Similar projects
+
+If citeref doesn't fit your workflow, these plugins cover overlapping ground:
+
+- **[zotcite](https://github.com/jalvesaq/zotcite)** — the most feature-rich option if you use Zotero. Queries the Zotero database directly (no `.bib` export needed), provides omnicompletion, opens PDF attachments, and can extract annotations and notes. Requires Python 3, `sqlite3`, and `nvim-treesitter`. Supports Markdown, Quarto, RMarkdown, LaTeX, Rnoweb, Typst, and vimwiki.
+
+- **[telescope-zotero.nvim](https://github.com/jmbuhr/telescope-zotero.nvim)** — a Telescope extension that browses your Zotero library and inserts the selected reference into a `.bib` file. Requires Zotero, Better BibTeX, and `sqlite.lua`. The intended workflow keeps citation insertion (via this plugin) separate from in-document completion (handled by a companion cmp source).
+
+- **[zotex.nvim](https://github.com/tiagovla/zotex.nvim)** — an nvim-cmp completion source that imports references directly from the Zotero SQLite database. Lightweight and focused: configure it as a cmp source for your filetypes and it will surface Zotero entries as you type. Requires `sqlite.lua`.
+
+**citeref** is the right choice if you work from `.bib` files rather than a live Zotero database, or if you need R/Quarto cross-reference (`\@ref`) insertion alongside citation support.
+
+---
+
 ## License
 
 GNU General Public License v3.0 — see [LICENSE](LICENSE).
