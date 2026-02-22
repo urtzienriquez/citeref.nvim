@@ -4,6 +4,14 @@ A Neovim plugin for inserting **citations** (from `.bib` files) and **cross-refe
 
 ---
 
+## Contributing
+
+Contributions of any kind are very welcome — bug reports, feature suggestions, documentation improvements, and especially code. If you have an idea for a new backend, a fix, or a quality-of-life improvement, please open an issue or pull request. This plugin is small and the codebase is meant to be easy to navigate, so diving in should be straightforward.
+
+If you want to contribute code, the [Architecture](#architecture) section at the bottom of this README is a good starting point for orientation. Custom backends are particularly easy to add without touching core files — see [Extending citeref with a custom backend](#extending-citeref-with-a-custom-backend).
+
+---
+
 ## Requirements
 
 - **One picker or completion backend** (required — no auto-detection):
