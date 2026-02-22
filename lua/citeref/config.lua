@@ -1,44 +1,38 @@
 --- citeref.nvim – configuration defaults and merging
 ---@class CiterefConfig
----@field filetypes string[]                 Filetypes where citeref activates
----@field bib_files string[]|fun():string[]  Explicit bib paths, or a function returning them
+---@field backend "fzf"|"telescope"|"blink"|"cmp"  Required – no auto-detection
+---@field filetypes string[]
+---@field bib_files string[]|fun():string[]
 ---@field keymaps CiterefKeymapConfig
 ---@field picker CiterefPickerConfig
 
 ---@class CiterefKeymapConfig
----@field enabled           boolean       Set false to disable ALL default keymaps
----@field cite_markdown_i   string|false  Insert citation (markdown @key)  – insert mode
----@field cite_markdown_n   string|false  Insert citation (markdown @key)  – normal mode
----@field cite_latex_i      string|false  Insert citation (\cite{})        – insert mode
----@field cite_latex_n      string|false  Insert citation (\cite{})        – normal mode
----@field cite_replace_n    string|false  Replace citation under cursor    – normal mode only
----@field crossref_figure_i string|false  Insert figure crossref           – insert mode
----@field crossref_figure_n string|false  Insert figure crossref           – normal mode
----@field crossref_table_i  string|false  Insert table crossref            – insert mode
----@field crossref_table_n  string|false  Insert table crossref            – normal mode
+---@field enabled           boolean
+---@field cite_markdown_i   string|false
+---@field cite_markdown_n   string|false
+---@field cite_latex_i      string|false
+---@field cite_latex_n      string|false
+---@field cite_replace_n    string|false
+---@field crossref_figure_i string|false
+---@field crossref_figure_n string|false
+---@field crossref_table_i  string|false
+---@field crossref_table_n  string|false
 
 ---@class CiterefPickerConfig
 ---@field layout "vertical"|"horizontal"
----@field preview_size string   e.g. "50%"
+---@field preview_size string
 
 local M = {}
 
 ---@type CiterefConfig
 M.defaults = {
-  -- Backend to use for picking and inserting.
-  -- "fzf"   → fzf-lua (full picker with preview, works in insert + normal mode)
-  -- "blink" → blink.cmp completion menu (insert mode only)
-  -- "cmp"   → nvim-cmp completion menu (insert mode only)
-  -- nil     → auto-detect at first use (fzf > blink > cmp)
+  -- Backend is REQUIRED. Set one of:
+  --   "fzf"       → fzf-lua: full picker with preview, insert + normal mode
+  --   "telescope" → telescope.nvim: full picker with preview, insert + normal mode
+  --   "blink"     → blink.cmp: completion menu, insert mode only
+  --   "cmp"       → nvim-cmp: completion menu, insert mode only
   backend = nil,
-  -- Neovim filetype values (always lowercase) for the file extensions you care about:
-  --   .md / .markdown  → "markdown"
-  --   .Rmd / .rmd      → "rmd"
-  --   .qmd / .Qmd      → "quarto"
-  --   .jmd / .Jmd      → "markdown" (Julia markdown, Neovim calls it markdown)
-  --   .tex             → "tex"  (or "latex" depending on content)
-  --   .rnw / .Rnw      → "rnoweb"
-  --   pandoc files     → "pandoc"
+
   filetypes = {
     "markdown",
     "rmd",
@@ -49,26 +43,15 @@ M.defaults = {
     "latex",
   },
 
-  -- Extra bib file(s) to search for citations, on top of any *.bib found in cwd.
-  -- cwd is always scanned automatically; this just adds more sources.
-  -- Accepts:
-  --   nil            → cwd only  (default)
-  --   string[]       → paths added to cwd results (~ expanded, missing files warned)
-  --   fun():string[] → called each time a picker opens (dynamic resolution)
-  --
-  -- Example – always include your Zotero library:
-  --   bib_files = { "~/Documents/zotero.bib" }
   bib_files = nil,
 
   keymaps = {
     enabled           = true,
-    -- citations
-    cite_markdown_i   = "<C-a>m",      -- insert mode
-    cite_markdown_n   = "<leader>am",  -- normal mode
+    cite_markdown_i   = "<C-a>m",
+    cite_markdown_n   = "<leader>am",
     cite_latex_i      = "<C-a>l",
     cite_latex_n      = "<leader>al",
-    cite_replace_n    = "<leader>ar",  -- normal mode only (cursor must be on a key)
-    -- cross-references
+    cite_replace_n    = "<leader>ar",
     crossref_figure_i = "<C-a>f",
     crossref_figure_n = "<leader>af",
     crossref_table_i  = "<C-a>t",
@@ -85,20 +68,41 @@ M.defaults = {
 M.options = {}
 local _initialized = false
 
---- Called once (optionally) by the user via require('citeref').setup(opts).
---- Safe to call multiple times – later calls win.
+local VALID_BACKENDS = { fzf = true, telescope = true, blink = true, cmp = true }
+
 ---@param opts? table
 function M.set(opts)
-  M.options      = vim.tbl_deep_extend("force", M.defaults, opts or {})
-  _initialized   = true
+  M.options    = vim.tbl_deep_extend("force", M.defaults, opts or {})
+  _initialized = true
+
+  if M.options.backend == nil then
+    vim.notify(
+      "citeref: backend is not set.\n"
+      .. "  Add backend = 'fzf', 'telescope', 'blink', or 'cmp' to your setup() call.",
+      vim.log.levels.WARN
+    )
+  elseif not VALID_BACKENDS[M.options.backend] then
+    vim.notify(
+      "citeref: unknown backend '" .. tostring(M.options.backend) .. "'.\n"
+      .. "  Valid values: 'fzf', 'telescope', 'blink', 'cmp'.",
+      vim.log.levels.ERROR
+    )
+  end
 end
 
---- Return resolved config, initialising with defaults if setup() was never called.
 ---@return CiterefConfig
 function M.get()
   if not _initialized then
     M.options    = vim.deepcopy(M.defaults)
     _initialized = true
+    -- Warn on first use if setup() was never called
+    vim.schedule(function()
+      vim.notify(
+        "citeref: setup() was not called – backend is not set.\n"
+        .. "  Add require('citeref').setup({ backend = 'fzf' }) to your config.",
+        vim.log.levels.WARN
+      )
+    end)
   end
   return M.options
 end
