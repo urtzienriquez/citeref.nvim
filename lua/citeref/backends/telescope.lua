@@ -201,7 +201,8 @@ function M.pick_crossref(ref_type, chunks, ctx)
   local title        = ref_type == "fig" and "Figure Crossref" or "Table Crossref"
   local cfg   = require("citeref.config").get()
 
-  local layout = cfg.picker.layout or "vertical"
+  -- local layout = cfg.picker.layout or "vertical"
+  local layout = "horizontal"
   pickers.new({}, {
     prompt_title    = title,
     layout_strategy = layout == "vertical" and "vertical" or "horizontal",

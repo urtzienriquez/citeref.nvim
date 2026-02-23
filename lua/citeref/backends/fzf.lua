@@ -196,6 +196,7 @@ end
 ---@param ctx table
 function M.pick_crossref(ref_type, chunks, ctx)
   local title  = ref_type == "fig" and " Figure Crossref " or " Table Crossref "
+  local cfg   = require("citeref.config").get()
   local lookup = {}
   local display_list = {}
 
@@ -213,7 +214,8 @@ function M.pick_crossref(ref_type, chunks, ctx)
     winopts = {
       title   = title,
       preview = {
-        layout     = cfg.picker.layout or "vertical",
+        -- layout     = cfg.picker.layout or "vertical",
+        layout     = "horizontal",
         vertical   = "down:50%",
         horizontal = "right:65%",
         wrap       = "wrap",
