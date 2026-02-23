@@ -4,6 +4,12 @@ local parse = require("citeref.parse")
 
 local M = {}
 
+local function parse_size(s)
+  if type(s) == "number" then return s end
+  local pct = tostring(s):match("^(%d+)%%$")
+  return pct and (tonumber(pct) / 100) or 0.5
+end
+
 -- ─────────────────────────────────────────────────────────────
 -- Shared previewer factories
 -- ─────────────────────────────────────────────────────────────
@@ -59,9 +65,22 @@ function M.pick_citation(format, entries, ctx)
   local actions      = require("telescope.actions")
   local action_state = require("telescope.actions.state")
   local title        = format == "latex" and "Citations [LaTeX]" or "Citations [Markdown]"
+  local cfg   = require("citeref.config").get()
+  local layout = cfg.picker.layout or "vertical"
 
   pickers.new({}, {
     prompt_title = title,
+    layout_strategy = layout == "vertical" and "vertical" or "horizontal",
+    layout_config = {
+      vertical = {
+        preview_height  = parse_size(cfg.picker.preview_size),
+        preview_cutoff  = 0,
+      },
+      horizontal = {
+        preview_width  = parse_size(cfg.picker.preview_size),
+        preview_cutoff = 0,
+      },
+    },
     finder = finders.new_table({
       results = entries,
       entry_maker = function(e)
@@ -112,9 +131,22 @@ function M.replace(entries, info)
 
   local buf = vim.api.nvim_get_current_buf()
   local row = vim.api.nvim_win_get_cursor(0)[1]
+  local cfg = require("citeref.config").get()
 
+  local layout = cfg.picker.layout or "vertical"
   pickers.new({}, {
-    prompt_title = "Replace @" .. info.key,
+    prompt_title    = "Replace @" .. info.key,
+    layout_strategy = layout == "vertical" and "vertical" or "horizontal",
+    layout_config = {
+      vertical = {
+        preview_height  = parse_size(cfg.picker.preview_size),
+        preview_cutoff  = 0,
+      },
+      horizontal = {
+        preview_width  = parse_size(cfg.picker.preview_size),
+        preview_cutoff = 0,
+      },
+    },
     finder = finders.new_table({
       results = entries,
       entry_maker = function(e)
@@ -167,9 +199,22 @@ function M.pick_crossref(ref_type, chunks, ctx)
   local actions      = require("telescope.actions")
   local action_state = require("telescope.actions.state")
   local title        = ref_type == "fig" and "Figure Crossref" or "Table Crossref"
+  local cfg   = require("citeref.config").get()
 
+  local layout = cfg.picker.layout or "vertical"
   pickers.new({}, {
-    prompt_title = title,
+    prompt_title    = title,
+    layout_strategy = layout == "vertical" and "vertical" or "horizontal",
+    layout_config = {
+      vertical = {
+        preview_height  = parse_size(cfg.picker.preview_size),
+        preview_cutoff  = 0,
+      },
+      horizontal = {
+        preview_width  = parse_size(cfg.picker.preview_size),
+        preview_cutoff = 0,
+      },
+    },
     finder = finders.new_table({
       results = chunks,
       entry_maker = function(c)
