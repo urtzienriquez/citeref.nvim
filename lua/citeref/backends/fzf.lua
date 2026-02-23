@@ -97,12 +97,13 @@ function M.pick_citation(format, entries, ctx)
   end, {
     prompt    = "> ",
     previewer = entry_previewer(entries),
-    winopts   = {
+    winopts = {
       title   = title,
       preview = {
-        layout   = "vertical",
-        vertical = "down:" .. cfg.picker.preview_size,
-        wrap     = "wrap",
+        layout    = cfg.picker.layout or "vertical",
+        vertical  = "down:"  .. cfg.picker.preview_size,
+        horizontal = "right:" .. cfg.picker.preview_size,
+        wrap      = "wrap",
         scrollbar = "border",
       },
     },
@@ -134,6 +135,7 @@ end
 ---@param info table
 function M.replace(entries, info)
   local buf    = vim.api.nvim_get_current_buf()
+  local cfg = require("citeref.config").get()
   local row    = vim.api.nvim_win_get_cursor(0)[1]
   local lookup = {}
 
@@ -148,7 +150,16 @@ function M.replace(entries, info)
   end, {
     prompt    = "replace with> ",
     previewer = entry_previewer(entries),
-    winopts   = { title = " Replace @" .. info.key .. " " },
+    winopts = {
+      title   = " Replace @" .. info.key .. " ",
+      preview = {
+        layout     = cfg.picker.layout or "vertical",
+        vertical   = "down:50%",
+        horizontal = "right:50%",
+        wrap       = "wrap",
+        scrollbar  = "border",
+      },
+    },
     actions   = {
       ["default"] = function(selected)
         if #selected == 0 then return end
@@ -199,9 +210,14 @@ function M.pick_crossref(ref_type, chunks, ctx)
   end, {
     prompt    = "chunk> ",
     previewer = chunk_previewer(lookup),
-    winopts   = {
+    winopts = {
       title   = title,
-      preview = { layout = "vertical", vertical = "right:65%", wrap = "wrap" },
+      preview = {
+        layout     = cfg.picker.layout or "vertical",
+        vertical   = "down:50%",
+        horizontal = "right:65%",
+        wrap       = "wrap",
+      },
     },
     actions = {
       ["default"] = function(selected)
