@@ -11,6 +11,40 @@ local function parse_size(s)
 end
 
 -- ─────────────────────────────────────────────────────────────
+-- Shared ranking helper
+-- ─────────────────────────────────────────────────────────────
+
+--- Rank entries so that key matches come before title/author matches.
+--- Within each group, preserve the input order (already sorted by key).
+---@param entries CiterefEntry[]
+---@param query string
+---@return CiterefEntry[]
+local function rank_entries(entries, query)
+  if not query or query == "" then return entries end
+  local q              = query:lower()
+  local key_start      = {}
+  local key_contains   = {}
+  local other_matches  = {}
+  for _, e in ipairs(entries) do
+    local k = e.key:lower()
+    if k:find("^" .. q) then
+      key_start[#key_start + 1] = e
+    elseif k:find(q, 1, true) then
+      key_contains[#key_contains + 1] = e
+    elseif e.title:lower():find(q, 1, true)
+        or e.author:lower():find(q, 1, true)
+        or e.journaltitle:lower():find(q, 1, true) then
+      other_matches[#other_matches + 1] = e
+    end
+  end
+  local results = {}
+  vim.list_extend(results, key_start)
+  vim.list_extend(results, key_contains)
+  vim.list_extend(results, other_matches)
+  return results
+end
+
+-- ─────────────────────────────────────────────────────────────
 -- Shared previewer factories
 -- ─────────────────────────────────────────────────────────────
 
@@ -61,35 +95,37 @@ end
 function M.pick_citation(format, entries, ctx)
   local pickers      = require("telescope.pickers")
   local finders      = require("telescope.finders")
-  local conf         = require("telescope.config").values
+  local sorters      = require("telescope.sorters")
   local actions      = require("telescope.actions")
   local action_state = require("telescope.actions.state")
   local title        = format == "latex" and "Citations [LaTeX]" or "Citations [Markdown]"
-  local cfg   = require("citeref.config").get()
-  local layout = cfg.picker.layout or "vertical"
+  local cfg          = require("citeref.config").get()
+  local layout       = cfg.picker.layout or "vertical"
 
   pickers.new({}, {
-    prompt_title = title,
+    prompt_title    = title,
     layout_strategy = layout == "vertical" and "vertical" or "horizontal",
     layout_config = {
       vertical = {
-        preview_height  = parse_size(cfg.picker.preview_size),
-        preview_cutoff  = 0,
+        preview_height = parse_size(cfg.picker.preview_size),
+        preview_cutoff = 0,
       },
       horizontal = {
         preview_width  = parse_size(cfg.picker.preview_size),
         preview_cutoff = 0,
       },
     },
-    finder = finders.new_table({
-      results = entries,
+    finder = finders.new_dynamic({
+      fn = function(query)
+        return rank_entries(entries, query)
+      end,
       entry_maker = function(e)
         local d = parse.entry_display(e)
         return { value = e, display = d, ordinal = d }
       end,
     }),
     previewer = entry_previewer(),
-    sorter    = conf.generic_sorter({}),
+    sorter    = sorters.empty(),
     attach_mappings = function(prompt_bufnr)
       actions.select_default:replace(function()
         local picker   = action_state.get_current_picker(prompt_bufnr)
@@ -125,30 +161,32 @@ end
 function M.replace(entries, info)
   local pickers      = require("telescope.pickers")
   local finders      = require("telescope.finders")
-  local conf         = require("telescope.config").values
+  local sorters      = require("telescope.sorters")
   local actions      = require("telescope.actions")
   local action_state = require("telescope.actions.state")
 
-  local buf = vim.api.nvim_get_current_buf()
-  local row = vim.api.nvim_win_get_cursor(0)[1]
-  local cfg = require("citeref.config").get()
-
+  local buf    = vim.api.nvim_get_current_buf()
+  local row    = vim.api.nvim_win_get_cursor(0)[1]
+  local cfg    = require("citeref.config").get()
   local layout = cfg.picker.layout or "vertical"
+
   pickers.new({}, {
     prompt_title    = "Replace @" .. info.key,
     layout_strategy = layout == "vertical" and "vertical" or "horizontal",
     layout_config = {
       vertical = {
-        preview_height  = parse_size(cfg.picker.preview_size),
-        preview_cutoff  = 0,
+        preview_height = parse_size(cfg.picker.preview_size),
+        preview_cutoff = 0,
       },
       horizontal = {
         preview_width  = parse_size(cfg.picker.preview_size),
         preview_cutoff = 0,
       },
     },
-    finder = finders.new_table({
-      results = entries,
+    finder = finders.new_dynamic({
+      fn = function(query)
+        return rank_entries(entries, query)
+      end,
       entry_maker = function(e)
         local d = parse.entry_display(e)
         if e.key == info.key then d = d .. " (current)" end
@@ -156,7 +194,7 @@ function M.replace(entries, info)
       end,
     }),
     previewer = entry_previewer(),
-    sorter    = conf.generic_sorter({}),
+    sorter    = sorters.empty(),
     attach_mappings = function(prompt_bufnr)
       actions.select_default:replace(function()
         local sel = action_state.get_selected_entry()
@@ -199,17 +237,16 @@ function M.pick_crossref(ref_type, chunks, ctx)
   local actions      = require("telescope.actions")
   local action_state = require("telescope.actions.state")
   local title        = ref_type == "fig" and "Figure Crossref" or "Table Crossref"
-  local cfg   = require("citeref.config").get()
+  local cfg          = require("citeref.config").get()
 
-  -- local layout = cfg.picker.layout or "vertical"
   local layout = "horizontal"
   pickers.new({}, {
     prompt_title    = title,
     layout_strategy = layout == "vertical" and "vertical" or "horizontal",
     layout_config = {
       vertical = {
-        preview_height  = parse_size(cfg.picker.preview_size),
-        preview_cutoff  = 0,
+        preview_height = parse_size(cfg.picker.preview_size),
+        preview_cutoff = 0,
       },
       horizontal = {
         preview_width  = parse_size(cfg.picker.preview_size),

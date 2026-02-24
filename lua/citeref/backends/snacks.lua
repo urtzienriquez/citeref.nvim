@@ -24,6 +24,64 @@ local function preset_name()
   return require("citeref.config").get().picker.layout or "vertical"
 end
 
+--- Rank entries: keys starting with query → keys containing query → title/author matches.
+--- Within each group, preserve alphabetical-by-key input order.
+---@param entries CiterefEntry[]
+---@param query string
+---@return CiterefEntry[]
+local function rank_entries(entries, query)
+  if not query or query == "" then return entries end
+  local q             = query:lower()
+  local key_start     = {}
+  local key_contains  = {}
+  local other_matches = {}
+  for _, e in ipairs(entries) do
+    local k = e.key:lower()
+    if k:find("^" .. q) then
+      key_start[#key_start + 1] = e
+    elseif k:find(q, 1, true) then
+      key_contains[#key_contains + 1] = e
+    elseif e.title:lower():find(q, 1, true)
+        or e.author:lower():find(q, 1, true)
+        or e.journaltitle:lower():find(q, 1, true) then
+      other_matches[#other_matches + 1] = e
+    end
+  end
+  local results = {}
+  vim.list_extend(results, key_start)
+  vim.list_extend(results, key_contains)
+  vim.list_extend(results, other_matches)
+  return results
+end
+
+--- Build a live finder function that re-ranks on every keystroke.
+--- snacks calls this with (opts, ctx) on every query change when live = true,
+--- using ctx.filter.search as the current query string.
+---@param entries CiterefEntry[]
+---@param current_key? string  mark current key in replace picker
+---@return function
+local function make_finder(entries, current_key)
+  return function(_, ctx)
+    local query  = (ctx and ctx.filter and ctx.filter.search) or ""
+    local ranked = rank_entries(entries, query)
+    local items  = {}
+    for idx, e in ipairs(ranked) do
+      local display = parse.entry_display(e)
+      if current_key and e.key == current_key then
+        display = display .. " (current)"
+      end
+      items[#items + 1] = {
+        idx     = idx,
+        score   = idx,
+        text    = display,
+        entry   = e,
+        preview = parse.entry_preview(e),
+      }
+    end
+    return items
+  end
+end
+
 -- ─────────────────────────────────────────────────────────────
 -- Citation picker
 -- ─────────────────────────────────────────────────────────────
@@ -35,18 +93,10 @@ function M.pick_citation(format, entries, ctx)
   local Snacks = require("snacks")
   local title  = format == "latex" and " Citations [LaTeX] " or " Citations [Markdown] "
 
-  local items = {}
-  for _, e in ipairs(entries) do
-    items[#items + 1] = {
-      text    = parse.entry_display(e),
-      entry   = e,
-      preview = parse.entry_preview(e),
-    }
-  end
-
   Snacks.picker({
     title   = title,
-    items   = items,
+    finder  = make_finder(entries),
+    live    = true,
     format  = function(item) return { { item.text, "Normal" } } end,
     preview = function(ctx_p)
       local item = ctx_p.item
@@ -54,12 +104,9 @@ function M.pick_citation(format, entries, ctx)
       set_preview_lines(ctx_p.buf, vim.split(item.preview or "", "\n"))
     end,
     layout  = { preset = preset_name() },
-    confirm = function(picker, _item)
-      -- Collect marked items before closing; fallback = true means the focused
-      -- item is returned when nothing is explicitly marked.
+    confirm = function(picker)
       local selected = picker:selected({ fallback = true })
       picker:close()
-      -- Schedule so snacks fully tears down before we touch the buffer/mode.
       vim.schedule(function()
         local keys = {}
         for _, it in ipairs(selected) do
@@ -88,20 +135,10 @@ function M.replace(entries, info)
   local buf    = vim.api.nvim_get_current_buf()
   local row    = vim.api.nvim_win_get_cursor(0)[1]
 
-  local items = {}
-  for _, e in ipairs(entries) do
-    local display = parse.entry_display(e)
-    if e.key == info.key then display = display .. " (current)" end
-    items[#items + 1] = {
-      text    = display,
-      entry   = e,
-      preview = parse.entry_preview(e),
-    }
-  end
-
   Snacks.picker({
     title   = " Replace @" .. info.key .. " ",
-    items   = items,
+    finder  = make_finder(entries, info.key),
+    live    = true,
     format  = function(item) return { { item.text, "Normal" } } end,
     preview = function(ctx_p)
       local item = ctx_p.item
@@ -147,12 +184,13 @@ function M.pick_crossref(ref_type, chunks, ctx)
   local title  = ref_type == "fig" and " Figure Crossref " or " Table Crossref "
 
   local items = {}
-  for _, c in ipairs(chunks) do
+  for idx, c in ipairs(chunks) do
     local item = {
+      idx   = idx,
+      score = idx,
       text  = c.display,
       chunk = c,
     }
-    -- snacks previews file+line automatically when these fields are set
     if c.file and c.file ~= "" and vim.fn.filereadable(c.file) == 1 then
       item.file = c.file
       item.pos  = { c.line, 0 }
