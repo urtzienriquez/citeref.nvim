@@ -29,46 +29,46 @@ local M = {}
 
 ---@type CiterefConfig
 M.defaults = {
-  -- Backend is REQUIRED. Set one of:
-  --   "fzf"       → fzf-lua: full picker with preview, insert + normal mode
-  --   "telescope" → telescope.nvim: full picker with preview, insert + normal mode
-  --   "snacks"    → snacks.nvim: full picker with preview, insert + normal mode
-  --   "blink"     → blink.cmp: completion menu, insert mode only
-  --   "cmp"       → nvim-cmp: completion menu, insert mode only
-  backend = nil,
+	-- Backend is REQUIRED. Set one of:
+	--   "fzf"       → fzf-lua: full picker with preview, insert + normal mode
+	--   "telescope" → telescope.nvim: full picker with preview, insert + normal mode
+	--   "snacks"    → snacks.nvim: full picker with preview, insert + normal mode
+	--   "blink"     → blink.cmp: completion menu, insert mode only
+	--   "cmp"       → nvim-cmp: completion menu, insert mode only
+	backend = nil,
 
-  filetypes = {
-    "markdown",
-    "rmd",
-    "quarto",
-    "rnoweb",
-    "pandoc",
-    "tex",
-    "latex",
-  },
+	filetypes = {
+		"markdown",
+		"rmd",
+		"quarto",
+		"rnoweb",
+		"pandoc",
+		"tex",
+		"latex",
+	},
 
-  bib_files = nil,
+	bib_files = nil,
 
-  keymaps = {
-    enabled           = true,
-    cite_markdown_i   = "<C-a>m",
-    cite_markdown_n   = "<leader>am",
-    cite_latex_i      = "<C-a>l",
-    cite_latex_n      = "<leader>al",
-    cite_replace_n    = "<leader>ar",
-    crossref_figure_i = "<C-a>f",
-    crossref_figure_n = "<leader>af",
-    crossref_table_i  = "<C-a>t",
-    crossref_table_n  = "<leader>at",
-  },
+	keymaps = {
+		enabled = true,
+		cite_markdown_i = "<C-a>m",
+		cite_markdown_n = "<leader>am",
+		cite_latex_i = "<C-a>l",
+		cite_latex_n = "<leader>al",
+		cite_replace_n = "<leader>ar",
+		crossref_figure_i = "<C-a>f",
+		crossref_figure_n = "<leader>af",
+		crossref_table_i = "<C-a>t",
+		crossref_table_n = "<leader>at",
+	},
 
-  picker = {
-    -- fzf / telescope: "vertical" | "horizontal"
-    -- snacks: any preset name — "default" | "vertical" | "horizontal" |
-    --         "telescope" | "ivy" | "ivy_split" | "select" | "sidebar" | "vscode"
-    layout       = "vertical",
-    preview_size = "50%",  -- fzf / telescope only
-  },
+	picker = {
+		-- fzf / telescope: "vertical" | "horizontal"
+		-- snacks: any preset name — "default" | "vertical" | "horizontal" |
+		--         "telescope" | "ivy" | "ivy_split" | "select" | "sidebar" | "vscode"
+		layout = "vertical",
+		preview_size = "50%", -- fzf / telescope only
+	},
 }
 
 ---@type CiterefConfig
@@ -79,39 +79,41 @@ local VALID_BACKENDS = { fzf = true, telescope = true, snacks = true, blink = tr
 
 ---@param opts? table
 function M.set(opts)
-  M.options    = vim.tbl_deep_extend("force", M.defaults, opts or {})
-  _initialized = true
+	M.options = vim.tbl_deep_extend("force", M.defaults, opts or {})
+	_initialized = true
 
-  if M.options.backend == nil then
-    vim.notify(
-      "citeref: backend is not set.\n"
-      .. "  Add backend = 'fzf', 'telescope', 'snacks', 'blink', or 'cmp' to your setup() call.",
-      vim.log.levels.WARN
-    )
-  elseif not VALID_BACKENDS[M.options.backend] then
-    vim.notify(
-      "citeref: unknown backend '" .. tostring(M.options.backend) .. "'.\n"
-      .. "  Valid values: 'fzf', 'telescope', 'snacks', 'blink', 'cmp'.",
-      vim.log.levels.ERROR
-    )
-  end
+	if M.options.backend == nil then
+		vim.notify(
+			"citeref: backend is not set.\n"
+				.. "  Add backend = 'fzf', 'telescope', 'snacks', 'blink', or 'cmp' to your setup() call.",
+			vim.log.levels.WARN
+		)
+	elseif not VALID_BACKENDS[M.options.backend] then
+		vim.notify(
+			"citeref: unknown backend '"
+				.. tostring(M.options.backend)
+				.. "'.\n"
+				.. "  Valid values: 'fzf', 'telescope', 'snacks', 'blink', 'cmp'.",
+			vim.log.levels.ERROR
+		)
+	end
 end
 
 ---@return CiterefConfig
 function M.get()
-  if not _initialized then
-    M.options    = vim.deepcopy(M.defaults)
-    _initialized = true
-    -- Warn on first use if setup() was never called
-    vim.schedule(function()
-      vim.notify(
-        "citeref: setup() was not called – backend is not set.\n"
-        .. "  Add require('citeref').setup({ backend = 'fzf' }) to your config.",
-        vim.log.levels.WARN
-      )
-    end)
-  end
-  return M.options
+	if not _initialized then
+		M.options = vim.deepcopy(M.defaults)
+		_initialized = true
+		-- Warn on first use if setup() was never called
+		vim.schedule(function()
+			vim.notify(
+				"citeref: setup() was not called – backend is not set.\n"
+					.. "  Add require('citeref').setup({ backend = 'fzf' }) to your config.",
+				vim.log.levels.WARN
+			)
+		end)
+	end
+	return M.options
 end
 
 return M
