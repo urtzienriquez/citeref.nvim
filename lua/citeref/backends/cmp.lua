@@ -22,29 +22,33 @@ end
 local KIND = { Reference = 18, Value = 12, Field = 5 }
 
 local function citation_items(format)
-	local entries = parse.load_entries()
-	local items = {}
-	for _, e in ipairs(entries) do
-		local insert = format == "latex" and ("\\cite{" .. e.key .. "}") or ("@" .. e.key)
-		local detail = table.concat(
-			vim.tbl_filter(function(s)
-				return s ~= ""
-			end, { e.author, e.year, e.journaltitle }),
-			" · "
-		)
-		items[#items + 1] = {
-			label = insert,
-			kind = KIND.Reference,
-			detail = detail ~= "" and detail or nil,
-			documentation = e.title ~= "" and {
-				kind = "plaintext",
-				value = e.title .. (e.abstract ~= "" and ("\n\n" .. e.abstract) or ""),
-			} or nil,
-			insertText = insert,
-			data = { type = "citation", key = e.key, format = format },
-		}
-	end
-	return items
+    local entries = parse.load_entries()
+    local items = {}
+    for _, e in ipairs(entries) do
+        local insert
+        if format == "latex" then
+            insert = "\\cite{" .. e.key .. "}"
+        elseif format == "latex_key" then
+            insert = e.key .. "}"  -- user already typed \cite{, just need the key; they close with }
+        else
+            insert = "@" .. e.key
+        end
+        local detail = table.concat(
+            vim.tbl_filter(function(s) return s ~= "" end,
+            { e.author, e.year, e.journaltitle }), " · ")
+        items[#items + 1] = {
+            label         = e.key,
+            kind          = KIND.Reference,
+            detail        = detail ~= "" and detail or nil,
+            documentation = e.title ~= "" and {
+                kind  = "plaintext",
+                value = e.title .. (e.abstract ~= "" and ("\n\n" .. e.abstract) or ""),
+            } or nil,
+            insertText    = insert,
+            data          = { type = "citation", key = e.key, format = format },
+        }
+    end
+    return items
 end
 
 local function crossref_items(ref_type)
@@ -104,7 +108,7 @@ function Source.new()
 end
 
 function Source:get_trigger_characters()
-	return { "@" }
+	return { "{", "@" }
 end
 
 function Source:is_available()
@@ -117,11 +121,13 @@ end
 
 function Source:complete(request, callback)
 	local before = request.context.cursor_before_line
-	if not before:match("@[%w_%-:%.]*$") then
+	if before:match("\\cite[%a]*%{$") then
+		callback({ items = citation_items("latex_key"), isIncomplete = false })
+	elseif before:match("@[%w_%-:%.]*$") then
+		callback({ items = current_items(), isIncomplete = false })
+	else
 		callback({ items = {}, isIncomplete = false })
-		return
 	end
-	callback({ items = current_items(), isIncomplete = false })
 end
 
 -- ─────────────────────────────────────────────────────────────
