@@ -118,6 +118,11 @@ require("citeref").setup({
   --   fun():string[] → function called each time a picker opens (dynamic)
   bib_files = { "/path/to/your/library.bib" },
 
+  -- Default LaTeX citation command used when the LaTeX picker opens.
+  -- Press <C-l> inside the picker to cycle through all available formats.
+  -- Valid values: "cite" | "citep" | "citet" | "citeauthor" | "citeyear" | "citealt"
+  default_latex_format = "cite",
+
   keymaps = {
     -- Set to false to disable all default keymaps.
     enabled = true,
@@ -185,6 +190,38 @@ vim.api.nvim_create_autocmd("FileType", {
 | normal | `<leader>at`  | Insert table crossref `\@ref(tab:X)`  | picker backend |
 
 Normal-mode keymaps with a completion backend show a warning — there is no picker equivalent for normal mode without fzf-lua, telescope, or snacks.
+
+---
+
+## LaTeX citation formats
+
+When using a picker backend, the LaTeX citation picker (`<C-a>l` / `<leader>al`) opens with your `default_latex_format` active (defaults to `\cite{}`). Press **`<C-l>`** inside the picker to cycle through all available formats:
+
+| Command          | Output                    |
+|------------------|---------------------------|
+| `\cite{}`        | `\cite{key}`              |
+| `\citep{}`       | `\citep{key}`             |
+| `\citet{}`       | `\citet{key}`             |
+| `\citeauthor{}`  | `\citeauthor{key}`        |
+| `\citeyear{}`    | `\citeyear{key}`          |
+| `\citealt{}`     | `\citealt{key}`           |
+| `\textcite{}`    | `\textcite{key}`          |
+| `\parencite{}`   | `\parencite{key}`         |
+| `\footcite{}`    | `\footcite{key}`          |
+| `\autocite{}`    | `\autocite{key}`          |
+
+The current format is shown in the picker title. A notification confirms each cycle.
+
+To always open on a specific format:
+
+```lua
+require("citeref").setup({
+  backend              = "fzf",
+  default_latex_format = "citep",
+})
+```
+
+Completion backends (`blink`, `cmp`) trigger on `@` for markdown and `\cite{` for LaTeX. They do not support format cycling — the format is determined by what you type.
 
 ---
 
@@ -279,9 +316,11 @@ parse.load_entries()          -- resolve bib files + parse → CiterefEntry[]
 parse.load_chunks()           -- scan current buf + siblings → CiterefChunk[]
 parse.entry_display(entry)    -- "key │ title │ author"
 parse.entry_preview(entry)    -- multi-line preview string
-parse.format_citation(keys, format)  -- "@key" or "\cite{key}"
+parse.format_citation(keys)   -- "@key1; @key2" (markdown only)
 parse.citation_under_cursor() -- detect citation at cursor → info table or nil
 ```
+
+Note: for LaTeX citations, use `"\\cite{" .. cmd .. "}{" .. table.concat(keys, ", ") .. "}"` directly — `format_citation` is markdown-only. The available commands are defined in `lua/citeref/latex_formats.lua`.
 
 ---
 
@@ -293,6 +332,7 @@ lua/citeref/
   config.lua            Options, defaults, validation
   parse.lua             Bib parser, chunk parser, shared display helpers
   util.lua              Cursor context save/restore, text insertion
+  latex_formats.lua     LaTeX citation command definitions (single source of truth)
   backends/
     init.lua            Backend registry and lazy loader
     fzf.lua             fzf-lua picker (citations, crossrefs, replace)
