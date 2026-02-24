@@ -148,34 +148,22 @@ function M.pick_crossref(ref_type, chunks, ctx)
 
   local items = {}
   for _, c in ipairs(chunks) do
-    items[#items + 1] = {
+    local item = {
       text  = c.display,
       chunk = c,
     }
-  end
-
-  local function preview_chunk(ctx_p)
-    local item = ctx_p.item
-    if not item then return end
-    local chunk = item.chunk
-    if chunk.file and chunk.file ~= "" and vim.fn.filereadable(chunk.file) == 1 then
-      ctx_p.preview_file(chunk.file)
-      vim.schedule(function()
-        if ctx_p.winid and vim.api.nvim_win_is_valid(ctx_p.winid) then
-          pcall(vim.api.nvim_win_set_cursor, ctx_p.winid, { chunk.line, 0 })
-          pcall(vim.api.nvim_win_call, ctx_p.winid, function() vim.cmd("norm! zz") end)
-        end
-      end)
-    else
-      set_preview_lines(ctx_p.buf, { chunk.header or ("chunk at line " .. chunk.line) })
+    -- snacks previews file+line automatically when these fields are set
+    if c.file and c.file ~= "" and vim.fn.filereadable(c.file) == 1 then
+      item.file = c.file
+      item.pos  = { c.line, 0 }
     end
+    items[#items + 1] = item
   end
 
   Snacks.picker({
     title   = title,
     items   = items,
     format  = function(item) return { { item.text, "Normal" } } end,
-    preview = preview_chunk,
     layout  = { preset = preset_name() },
     confirm = function(picker, item)
       picker:close()
