@@ -87,7 +87,7 @@ sources = cmp.config.sources({
 })
 ```
 
-Both completion backends only show citeref items when you type `@`.
+Both completion backends show citeref items when you type `@` (markdown style) or `\*cite*{` (e.g. `\cite{`, `\citep{` or `\parencite{`; latex style).
 
 ---
 
