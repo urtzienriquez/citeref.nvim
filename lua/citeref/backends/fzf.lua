@@ -175,7 +175,7 @@ function M.pick_citation(format, entries, ctx)
 
 				if fzf_winid and vim.api.nvim_win_is_valid(fzf_winid) then
 					pcall(vim.api.nvim_win_set_config, fzf_winid, {
-						title = current_title(),
+						title = { { current_title(), "FzfLuaTitle" } },
 					})
 				end
 
