@@ -7,7 +7,7 @@ local M = {}
 
 local function is_picker()
   local b = require("citeref.config").get().backend
-  return b == "fzf" or b == "telescope"
+  return b == "fzf" or b == "telescope" or b == "snacks"
 end
 
 local function insert_mode()

@@ -1,0 +1,200 @@
+--- citeref.nvim – snacks.nvim picker backend
+local util  = require("citeref.util")
+local parse = require("citeref.parse")
+
+local M = {}
+
+-- ─────────────────────────────────────────────────────────────
+-- Helpers
+-- ─────────────────────────────────────────────────────────────
+
+--- Write lines into a snacks preview buffer, which is non-modifiable by default.
+local function set_preview_lines(buf, lines, ft)
+  local ma = vim.bo[buf].modifiable
+  vim.bo[buf].modifiable = true
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+  vim.bo[buf].filetype   = ft or "text"
+  vim.bo[buf].modifiable = ma
+end
+
+--- Return the snacks preset name from picker.layout.
+--- Accepts any snacks preset: "default", "vertical", "horizontal", "telescope",
+--- "ivy", "ivy_split", "select", "sidebar", "vscode".
+local function preset_name()
+  return require("citeref.config").get().picker.layout or "vertical"
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Citation picker
+-- ─────────────────────────────────────────────────────────────
+
+---@param format "markdown"|"latex"
+---@param entries CiterefEntry[]
+---@param ctx table
+function M.pick_citation(format, entries, ctx)
+  local Snacks = require("snacks")
+  local title  = format == "latex" and " Citations [LaTeX] " or " Citations [Markdown] "
+
+  local items = {}
+  for _, e in ipairs(entries) do
+    items[#items + 1] = {
+      text    = parse.entry_display(e),
+      entry   = e,
+      preview = parse.entry_preview(e),
+    }
+  end
+
+  Snacks.picker({
+    title   = title,
+    items   = items,
+    format  = function(item) return { { item.text, "Normal" } } end,
+    preview = function(ctx_p)
+      local item = ctx_p.item
+      if not item then return end
+      set_preview_lines(ctx_p.buf, vim.split(item.preview or "", "\n"))
+    end,
+    layout  = { preset = preset_name() },
+    confirm = function(picker, _item)
+      -- Collect marked items before closing; fallback = true means the focused
+      -- item is returned when nothing is explicitly marked.
+      local selected = picker:selected({ fallback = true })
+      picker:close()
+      -- Schedule so snacks fully tears down before we touch the buffer/mode.
+      vim.schedule(function()
+        local keys = {}
+        for _, it in ipairs(selected) do
+          if it and it.entry then
+            keys[#keys + 1] = it.entry.key
+          end
+        end
+        if #keys == 0 then return end
+        table.sort(keys)
+        local text = parse.format_citation(keys, format)
+        util.insert_at_context(ctx, text)
+        vim.notify("citeref: inserted " .. text, vim.log.levels.INFO)
+      end)
+    end,
+  })
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Replace citation under cursor
+-- ─────────────────────────────────────────────────────────────
+
+---@param entries CiterefEntry[]
+---@param info table
+function M.replace(entries, info)
+  local Snacks = require("snacks")
+  local buf    = vim.api.nvim_get_current_buf()
+  local row    = vim.api.nvim_win_get_cursor(0)[1]
+
+  local items = {}
+  for _, e in ipairs(entries) do
+    local display = parse.entry_display(e)
+    if e.key == info.key then display = display .. " (current)" end
+    items[#items + 1] = {
+      text    = display,
+      entry   = e,
+      preview = parse.entry_preview(e),
+    }
+  end
+
+  Snacks.picker({
+    title   = " Replace @" .. info.key .. " ",
+    items   = items,
+    format  = function(item) return { { item.text, "Normal" } } end,
+    preview = function(ctx_p)
+      local item = ctx_p.item
+      if not item then return end
+      set_preview_lines(ctx_p.buf, vim.split(item.preview or "", "\n"))
+    end,
+    layout  = { preset = preset_name() },
+    confirm = function(picker, item)
+      picker:close()
+      if not item or not item.entry then return end
+      local e = item.entry
+      if e.key == info.key then
+        vim.defer_fn(function()
+          vim.notify("citeref: same citation selected – no change", vim.log.levels.INFO)
+        end, 100)
+        return
+      end
+      local replacement = info.style == "latex" and e.key or ("@" .. e.key)
+      local ok, err = pcall(
+        vim.api.nvim_buf_set_text,
+        buf, row - 1, info.start_col, row - 1, info.end_col + 1, { replacement }
+      )
+      vim.defer_fn(function()
+        if ok then
+          vim.notify(string.format("citeref: %s → %s", info.key, e.key), vim.log.levels.INFO)
+        else
+          vim.notify("citeref: replacement failed – " .. tostring(err), vim.log.levels.ERROR)
+        end
+      end, 100)
+    end,
+  })
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Crossref picker
+-- ─────────────────────────────────────────────────────────────
+
+---@param ref_type "fig"|"tab"
+---@param chunks CiterefChunk[]
+---@param ctx table
+function M.pick_crossref(ref_type, chunks, ctx)
+  local Snacks = require("snacks")
+  local title  = ref_type == "fig" and " Figure Crossref " or " Table Crossref "
+
+  local items = {}
+  for _, c in ipairs(chunks) do
+    items[#items + 1] = {
+      text  = c.display,
+      chunk = c,
+    }
+  end
+
+  local function preview_chunk(ctx_p)
+    local item = ctx_p.item
+    if not item then return end
+    local chunk = item.chunk
+    if chunk.file and chunk.file ~= "" and vim.fn.filereadable(chunk.file) == 1 then
+      ctx_p.preview_file(chunk.file)
+      vim.schedule(function()
+        if ctx_p.winid and vim.api.nvim_win_is_valid(ctx_p.winid) then
+          pcall(vim.api.nvim_win_set_cursor, ctx_p.winid, { chunk.line, 0 })
+          pcall(vim.api.nvim_win_call, ctx_p.winid, function() vim.cmd("norm! zz") end)
+        end
+      end)
+    else
+      set_preview_lines(ctx_p.buf, { chunk.header or ("chunk at line " .. chunk.line) })
+    end
+  end
+
+  Snacks.picker({
+    title   = title,
+    items   = items,
+    format  = function(item) return { { item.text, "Normal" } } end,
+    preview = preview_chunk,
+    layout  = { preset = preset_name() },
+    confirm = function(picker, item)
+      picker:close()
+      vim.schedule(function()
+        if not item or not item.chunk then return end
+        local chunk = item.chunk
+        if chunk.label == "" then
+          vim.notify(
+            "citeref: chunk has no label – add a label to use it in a cross-reference",
+            vim.log.levels.WARN
+          )
+          return
+        end
+        local crossref = string.format("\\@ref(%s:%s)", ref_type, chunk.label)
+        util.insert_at_context(ctx, crossref)
+        vim.notify("citeref: inserted " .. crossref, vim.log.levels.INFO)
+      end)
+    end,
+  })
+end
+
+return M
