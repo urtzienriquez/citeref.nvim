@@ -13,11 +13,28 @@ local function parse_size(s)
 end
 
 -- ─────────────────────────────────────────────────────────────
+-- LaTeX citation formats
+-- ─────────────────────────────────────────────────────────────
+
+local LATEX_FORMATS = require("citeref.latex_formats")
+
+local function next_latex_format(current_cmd)
+	for i, f in ipairs(LATEX_FORMATS) do
+		if f.cmd == current_cmd then
+			return LATEX_FORMATS[(i % #LATEX_FORMATS) + 1]
+		end
+	end
+	return LATEX_FORMATS[1]
+end
+
+local function format_latex(keys, cmd)
+	return "\\" .. cmd .. "{" .. table.concat(keys, ", ") .. "}"
+end
+
+-- ─────────────────────────────────────────────────────────────
 -- Shared ranking helper
 -- ─────────────────────────────────────────────────────────────
 
---- Rank entries so that key matches come before title/author matches.
---- Within each group, preserve the input order (already sorted by key).
 ---@param entries CiterefEntry[]
 ---@param query string
 ---@return CiterefEntry[]
@@ -26,9 +43,7 @@ local function rank_entries(entries, query)
 		return entries
 	end
 	local q = query:lower()
-	local key_start = {}
-	local key_contains = {}
-	local other_matches = {}
+	local key_start, key_contains, other_matches = {}, {}, {}
 	for _, e in ipairs(entries) do
 		local k = e.key:lower()
 		if k:find("^" .. q) then
@@ -109,23 +124,34 @@ function M.pick_citation(format, entries, ctx)
 	local sorters = require("telescope.sorters")
 	local actions = require("telescope.actions")
 	local action_state = require("telescope.actions.state")
-	local title = format == "latex" and "Citations [LaTeX]" or "Citations [Markdown]"
 	local cfg = require("citeref.config").get()
 	local layout = cfg.picker.layout or "vertical"
 
+	-- Mutable state for latex format cycling
+	local default_cmd = (format == "latex") and cfg.default_latex_format or "cite"
+	local latex_fmt = LATEX_FORMATS[1]
+	for _, f in ipairs(LATEX_FORMATS) do
+		if f.cmd == default_cmd then
+			latex_fmt = f
+			break
+		end
+	end
+
+	local function current_title()
+		if format == "latex" then
+			return string.format("Citations [LaTeX: %s]  <C-l> cycle", latex_fmt.label)
+		else
+			return "Citations [Markdown]"
+		end
+	end
+
 	pickers
 		.new({}, {
-			prompt_title = title,
+			prompt_title = current_title(),
 			layout_strategy = layout == "vertical" and "vertical" or "horizontal",
 			layout_config = {
-				vertical = {
-					preview_height = parse_size(cfg.picker.preview_size),
-					preview_cutoff = 0,
-				},
-				horizontal = {
-					preview_width = parse_size(cfg.picker.preview_size),
-					preview_cutoff = 0,
-				},
+				vertical = { preview_height = parse_size(cfg.picker.preview_size), preview_cutoff = 0 },
+				horizontal = { preview_width = parse_size(cfg.picker.preview_size), preview_cutoff = 0 },
 			},
 			finder = finders.new_dynamic({
 				fn = function(query)
@@ -138,7 +164,8 @@ function M.pick_citation(format, entries, ctx)
 			}),
 			previewer = entry_previewer(),
 			sorter = sorters.empty(),
-			attach_mappings = function(prompt_bufnr)
+			attach_mappings = function(prompt_bufnr, map)
+				-- Confirm (insert citation)
 				actions.select_default:replace(function()
 					local picker = action_state.get_current_picker(prompt_bufnr)
 					local selected = picker:get_multi_selection()
@@ -161,12 +188,46 @@ function M.pick_citation(format, entries, ctx)
 					end
 					table.sort(keys)
 
-					local text = parse.format_citation(keys, format)
+					local text
+					if format == "latex" then
+						text = format_latex(keys, latex_fmt.cmd)
+					else
+						text = parse.format_citation(keys)
+					end
 					util.insert_at_context(ctx, text)
 					vim.defer_fn(function()
 						vim.notify("citeref: inserted " .. text, vim.log.levels.INFO)
 					end, 100)
 				end)
+
+				-- Cycle latex format with <C-l> (no-op for markdown)
+				if format == "latex" then
+					map({ "i", "n" }, "<C-l>", function()
+						latex_fmt = next_latex_format(latex_fmt.cmd)
+						-- Telescope doesn't expose a live title-update API, so we notify
+						-- and re-set the prompt title via the picker object.
+						local picker = action_state.get_current_picker(prompt_bufnr)
+						-- prompt_title is read at creation time; update the border title instead
+						local win = picker.prompt_win
+						if win and vim.api.nvim_win_is_valid(win) then
+							local ok = pcall(function()
+								vim.api.nvim_win_call(win, function()
+									-- Update the winbar/border title through the prompt border buf
+									local border = picker.prompt_border
+									if border and border.win and vim.api.nvim_win_is_valid(border.win) then
+										local title_line = current_title()
+										pcall(vim.api.nvim_buf_set_lines, border.bufnr, 0, 1, false, { title_line })
+									end
+								end)
+							end)
+							if not ok then
+								vim.notify("citeref: LaTeX format → " .. latex_fmt.label, vim.log.levels.INFO)
+							end
+						end
+						vim.notify("citeref: LaTeX format → " .. latex_fmt.label, vim.log.levels.INFO)
+					end)
+				end
+
 				return true
 			end,
 		})
@@ -185,7 +246,6 @@ function M.replace(entries, info)
 	local sorters = require("telescope.sorters")
 	local actions = require("telescope.actions")
 	local action_state = require("telescope.actions.state")
-
 	local buf = vim.api.nvim_get_current_buf()
 	local row = vim.api.nvim_win_get_cursor(0)[1]
 	local cfg = require("citeref.config").get()
@@ -196,14 +256,8 @@ function M.replace(entries, info)
 			prompt_title = "Replace @" .. info.key,
 			layout_strategy = layout == "vertical" and "vertical" or "horizontal",
 			layout_config = {
-				vertical = {
-					preview_height = parse_size(cfg.picker.preview_size),
-					preview_cutoff = 0,
-				},
-				horizontal = {
-					preview_width = parse_size(cfg.picker.preview_size),
-					preview_cutoff = 0,
-				},
+				vertical = { preview_height = parse_size(cfg.picker.preview_size), preview_cutoff = 0 },
+				horizontal = { preview_width = parse_size(cfg.picker.preview_size), preview_cutoff = 0 },
 			},
 			finder = finders.new_dynamic({
 				fn = function(query)
@@ -272,20 +326,12 @@ function M.pick_crossref(ref_type, chunks, ctx)
 	local title = ref_type == "fig" and "Figure Crossref" or "Table Crossref"
 	local cfg = require("citeref.config").get()
 
-	local layout = "horizontal"
 	pickers
 		.new({}, {
 			prompt_title = title,
-			layout_strategy = layout == "vertical" and "vertical" or "horizontal",
+			layout_strategy = "horizontal",
 			layout_config = {
-				vertical = {
-					preview_height = parse_size(cfg.picker.preview_size),
-					preview_cutoff = 0,
-				},
-				horizontal = {
-					preview_width = parse_size(cfg.picker.preview_size),
-					preview_cutoff = 0,
-				},
+				horizontal = { preview_width = parse_size(cfg.picker.preview_size), preview_cutoff = 0 },
 			},
 			finder = finders.new_table({
 				results = chunks,

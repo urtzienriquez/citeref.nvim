@@ -5,6 +5,7 @@
 ---@field bib_files string[]|fun():string[]
 ---@field keymaps CiterefKeymapConfig
 ---@field picker CiterefPickerConfig
+---@field default_latex_format string  Default LaTeX cite command (e.g. "cite", "citep", "citet")
 
 ---@class CiterefKeymapConfig
 ---@field enabled           boolean
@@ -49,6 +50,11 @@ M.defaults = {
 
 	bib_files = nil,
 
+	-- Default LaTeX citation command used when opening the LaTeX picker.
+	-- The picker always allows cycling through all formats with <C-l>.
+	-- Valid values: "cite" | "citep" | "citet" | "citeauthor" | "citeyear" | "citealt"
+	default_latex_format = "cite",
+
 	keymaps = {
 		enabled = true,
 		cite_markdown_i = "<C-a>m",
@@ -77,6 +83,19 @@ local _initialized = false
 
 local VALID_BACKENDS = { fzf = true, telescope = true, snacks = true, blink = true, cmp = true }
 
+local VALID_LATEX_FORMATS = {
+	cite = true,
+	citep = true,
+	citet = true,
+	citeauthor = true,
+	citeyear = true,
+	citealt = true,
+	textcite = true,
+	parencite = true,
+	footcite = true,
+	autocite = true,
+}
+
 ---@param opts? table
 function M.set(opts)
 	M.options = vim.tbl_deep_extend("force", M.defaults, opts or {})
@@ -97,6 +116,17 @@ function M.set(opts)
 			vim.log.levels.ERROR
 		)
 	end
+
+	if M.options.default_latex_format and not VALID_LATEX_FORMATS[M.options.default_latex_format] then
+		vim.notify(
+			"citeref: unknown default_latex_format '"
+				.. tostring(M.options.default_latex_format)
+				.. "'.\n"
+				.. "  Valid values: 'cite', 'citep', 'citet', 'citeauthor', 'citeyear', 'citealt'.",
+			vim.log.levels.WARN
+		)
+		M.options.default_latex_format = "cite"
+	end
 end
 
 ---@return CiterefConfig
@@ -104,7 +134,6 @@ function M.get()
 	if not _initialized then
 		M.options = vim.deepcopy(M.defaults)
 		_initialized = true
-		-- Warn on first use if setup() was never called
 		vim.schedule(function()
 			vim.notify(
 				"citeref: setup() was not called – backend is not set.\n"

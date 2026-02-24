@@ -194,20 +194,16 @@ function M.entry_preview(entry)
 	return table.concat(lines, "\n")
 end
 
---- Build the insertion text from a list of keys.
+--- Build the markdown citation string from a list of keys → "@key1; @key2".
+--- For LaTeX citations, backends use format_latex() with a specific cite command.
 ---@param keys string[]
----@param format "markdown"|"latex"
 ---@return string
-function M.format_citation(keys, format)
-	if format == "latex" then
-		return "\\cite{" .. table.concat(keys, ", ") .. "}"
-	else
-		local parts = {}
-		for _, k in ipairs(keys) do
-			parts[#parts + 1] = "@" .. k
-		end
-		return table.concat(parts, "; ")
+function M.format_citation(keys)
+	local parts = {}
+	for _, k in ipairs(keys) do
+		parts[#parts + 1] = "@" .. k
 	end
+	return table.concat(parts, "; ")
 end
 
 -- ─────────────────────────────────────────────────────────────

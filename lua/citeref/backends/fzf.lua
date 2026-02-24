@@ -5,6 +5,30 @@ local parse = require("citeref.parse")
 local M = {}
 
 -- ─────────────────────────────────────────────────────────────
+-- LaTeX citation formats
+-- ─────────────────────────────────────────────────────────────
+
+local LATEX_FORMATS = require("citeref.latex_formats")
+
+local function next_latex_format(current_cmd)
+	for i, f in ipairs(LATEX_FORMATS) do
+		if f.cmd == current_cmd then
+			local next = LATEX_FORMATS[(i % #LATEX_FORMATS) + 1]
+			return next
+		end
+	end
+	return LATEX_FORMATS[1]
+end
+
+--- Build the insertion text for a latex format.
+---@param keys string[]
+---@param cmd string  e.g. "citep"
+---@return string
+local function format_latex(keys, cmd)
+	return "\\" .. cmd .. "{" .. table.concat(keys, ", ") .. "}"
+end
+
+-- ─────────────────────────────────────────────────────────────
 -- Shared previewer factory
 -- ─────────────────────────────────────────────────────────────
 
@@ -83,7 +107,6 @@ end
 ---@param ctx table
 function M.pick_citation(format, entries, ctx)
 	local cfg = require("citeref.config").get()
-	local title = format == "latex" and " Citations [LaTeX] " or " Citations [Markdown] "
 
 	local lookup = {}
 	local lines = {}
@@ -91,6 +114,67 @@ function M.pick_citation(format, entries, ctx)
 		local d = parse.entry_display(e)
 		lookup[d] = e
 		lines[#lines + 1] = d
+	end
+
+	-- State for latex format cycling (only used when format == "latex")
+	local default_cmd = (format == "latex") and require("citeref.config").get().default_latex_format or "cite"
+	local latex_fmt = LATEX_FORMATS[1]
+	for _, f in ipairs(LATEX_FORMATS) do
+		if f.cmd == default_cmd then
+			latex_fmt = f
+			break
+		end
+	end
+
+	local function current_title()
+		if format == "latex" then
+			return string.format(" Citations [LaTeX: %s]  <C-l> cycle ", latex_fmt.label)
+		else
+			return " Citations [Markdown] "
+		end
+	end
+
+	local function do_insert(selected, fzf_win)
+		if #selected == 0 then
+			return
+		end
+		local keys = {}
+		for _, l in ipairs(selected) do
+			local e = lookup[l]
+			if e then
+				keys[#keys + 1] = e.key
+			end
+		end
+		if #keys == 0 then
+			return
+		end
+		table.sort(keys)
+
+		local text
+		if format == "latex" then
+			text = format_latex(keys, latex_fmt.cmd)
+		else
+			text = parse.format_citation(keys)
+		end
+		util.insert_at_context(ctx, text)
+		vim.defer_fn(function()
+			vim.notify("citeref: inserted " .. text, vim.log.levels.INFO)
+		end, 100)
+	end
+
+	-- fzf runs inside a terminal buffer. The only reliable way to have a
+	-- side-effect keybind that does NOT close fzf is via winopts.on_create,
+	-- which fires after the terminal window is created. We register a
+	-- terminal-mode map (buffer = 0) there. The `actions` table is for binds
+	-- that accept/submit items — they always close fzf.
+	local on_create = nil
+	if format == "latex" then
+		on_create = function()
+			vim.keymap.set("t", "<C-l>", function()
+				latex_fmt = next_latex_format(latex_fmt.cmd)
+				vim.notify("citeref: LaTeX format → " .. latex_fmt.label, vim.log.levels.INFO)
+			end, { buffer = 0, nowait = true, desc = "citeref: cycle LaTeX format" })
+		end
 	end
 
 	require("fzf-lua").fzf_exec(function(cb)
@@ -102,7 +186,7 @@ function M.pick_citation(format, entries, ctx)
 		prompt = "> ",
 		previewer = entry_previewer(entries),
 		winopts = {
-			title = title,
+			title = current_title(),
 			preview = {
 				layout = cfg.picker.layout or "vertical",
 				vertical = "down:" .. cfg.picker.preview_size,
@@ -110,28 +194,11 @@ function M.pick_citation(format, entries, ctx)
 				wrap = "wrap",
 				scrollbar = "border",
 			},
+			on_create = on_create,
 		},
 		actions = {
 			["default"] = function(selected)
-				if #selected == 0 then
-					return
-				end
-				local keys = {}
-				for _, l in ipairs(selected) do
-					local e = lookup[l]
-					if e then
-						keys[#keys + 1] = e.key
-					end
-				end
-				if #keys == 0 then
-					return
-				end
-				table.sort(keys)
-				local text = parse.format_citation(keys, format)
-				util.insert_at_context(ctx, text)
-				vim.defer_fn(function()
-					vim.notify("citeref: inserted " .. text, vim.log.levels.INFO)
-				end, 100)
+				do_insert(selected)
 			end,
 		},
 	})
@@ -235,7 +302,6 @@ function M.pick_crossref(ref_type, chunks, ctx)
 		winopts = {
 			title = title,
 			preview = {
-				-- layout     = cfg.picker.layout or "vertical",
 				layout = "horizontal",
 				vertical = "down:50%",
 				horizontal = "right:65%",

@@ -5,10 +5,28 @@ local parse = require("citeref.parse")
 local M = {}
 
 -- ─────────────────────────────────────────────────────────────
+-- LaTeX citation formats
+-- ─────────────────────────────────────────────────────────────
+
+local LATEX_FORMATS = require("citeref.latex_formats")
+
+local function next_latex_format(current_cmd)
+	for i, f in ipairs(LATEX_FORMATS) do
+		if f.cmd == current_cmd then
+			return LATEX_FORMATS[(i % #LATEX_FORMATS) + 1]
+		end
+	end
+	return LATEX_FORMATS[1]
+end
+
+local function format_latex(keys, cmd)
+	return "\\" .. cmd .. "{" .. table.concat(keys, ", ") .. "}"
+end
+
+-- ─────────────────────────────────────────────────────────────
 -- Helpers
 -- ─────────────────────────────────────────────────────────────
 
---- Write lines into a snacks preview buffer, which is non-modifiable by default.
 local function set_preview_lines(buf, lines, ft)
 	local ma = vim.bo[buf].modifiable
 	vim.bo[buf].modifiable = true
@@ -17,15 +35,10 @@ local function set_preview_lines(buf, lines, ft)
 	vim.bo[buf].modifiable = ma
 end
 
---- Return the snacks preset name from picker.layout.
---- Accepts any snacks preset: "default", "vertical", "horizontal", "telescope",
---- "ivy", "ivy_split", "select", "sidebar", "vscode".
 local function preset_name()
 	return require("citeref.config").get().picker.layout or "vertical"
 end
 
---- Rank entries: keys starting with query → keys containing query → title/author matches.
---- Within each group, preserve alphabetical-by-key input order.
 ---@param entries CiterefEntry[]
 ---@param query string
 ---@return CiterefEntry[]
@@ -34,9 +47,7 @@ local function rank_entries(entries, query)
 		return entries
 	end
 	local q = query:lower()
-	local key_start = {}
-	local key_contains = {}
-	local other_matches = {}
+	local key_start, key_contains, other_matches = {}, {}, {}
 	for _, e in ipairs(entries) do
 		local k = e.key:lower()
 		if k:find("^" .. q) then
@@ -58,11 +69,8 @@ local function rank_entries(entries, query)
 	return results
 end
 
---- Build a live finder function that re-ranks on every keystroke.
---- snacks calls this with (opts, ctx) on every query change when live = true,
---- using ctx.filter.search as the current query string.
 ---@param entries CiterefEntry[]
----@param current_key? string  mark current key in replace picker
+---@param current_key? string
 ---@return function
 local function make_finder(entries, current_key)
 	return function(_, ctx)
@@ -95,10 +103,42 @@ end
 ---@param ctx table
 function M.pick_citation(format, entries, ctx)
 	local Snacks = require("snacks")
-	local title = format == "latex" and " Citations [LaTeX] " or " Citations [Markdown] "
+
+	-- Mutable state for latex format cycling
+	local default_cmd = (format == "latex") and require("citeref.config").get().default_latex_format or "cite"
+	local latex_fmt = LATEX_FORMATS[1]
+	for _, f in ipairs(LATEX_FORMATS) do
+		if f.cmd == default_cmd then
+			latex_fmt = f
+			break
+		end
+	end
+
+	local function current_title()
+		if format == "latex" then
+			return string.format(" Citations [LaTeX: %s]  <C-l> cycle ", latex_fmt.label)
+		else
+			return " Citations [Markdown] "
+		end
+	end
+
+	-- Snacks picker keymaps work as: win.input.keys maps a key to an action
+	-- name (string), and the function lives in the top-level `actions` table.
+	-- Both must be present — the key binding alone won't work without the
+	-- action, and vice versa.
+	local win_input_keys = {}
+	local picker_actions = {}
+
+	if format == "latex" then
+		win_input_keys["<C-l>"] = { "citeref_cycle_latex", mode = { "i", "n" } }
+		picker_actions["citeref_cycle_latex"] = function(_picker)
+			latex_fmt = next_latex_format(latex_fmt.cmd)
+			vim.notify("citeref: LaTeX format → " .. latex_fmt.label, vim.log.levels.INFO)
+		end
+	end
 
 	Snacks.picker({
-		title = title,
+		title = current_title(),
 		finder = make_finder(entries),
 		live = true,
 		format = function(item)
@@ -112,6 +152,8 @@ function M.pick_citation(format, entries, ctx)
 			set_preview_lines(ctx_p.buf, vim.split(item.preview or "", "\n"))
 		end,
 		layout = { preset = preset_name() },
+		win = { input = { keys = win_input_keys } },
+		actions = picker_actions,
 		confirm = function(picker)
 			local selected = picker:selected({ fallback = true })
 			picker:close()
@@ -126,7 +168,13 @@ function M.pick_citation(format, entries, ctx)
 					return
 				end
 				table.sort(keys)
-				local text = parse.format_citation(keys, format)
+
+				local text
+				if format == "latex" then
+					text = format_latex(keys, latex_fmt.cmd)
+				else
+					text = parse.format_citation(keys)
+				end
 				util.insert_at_context(ctx, text)
 				vim.notify("citeref: inserted " .. text, vim.log.levels.INFO)
 			end)
