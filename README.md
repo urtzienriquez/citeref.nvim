@@ -1,6 +1,10 @@
-# citeref.nvim
+<div align="center">
+
+![citeref-logo-compact](https://github.com/user-attachments/assets/fb3b28e2-b9e9-4907-84a6-299930fc9183)
 
 > A Neovim plugin for inserting **citations** (from `.bib` files) and **cross-references** (to R/Quarto code chunks).
+
+</div>
 
 Contributions are very welcomed! See [Contributing](#contributing)
 
