@@ -121,7 +121,7 @@ end
 
 function Source:complete(request, callback)
 	local before = request.context.cursor_before_line
-	if before:match("\\cite[%a]*%{$") then
+	if before:match("\\[%a]*cite[%a]*%{$") then
 		callback({ items = citation_items("latex_key"), isIncomplete = false })
 	elseif before:match("@[%w_%-:%.]*$") then
 		callback({ items = current_items(), isIncomplete = false })

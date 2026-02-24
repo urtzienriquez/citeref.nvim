@@ -25,7 +25,14 @@ local function citation_items(format)
 	local entries = parse.load_entries()
 	local items = {}
 	for _, e in ipairs(entries) do
-		local insert = format == "latex" and ("\\cite{" .. e.key .. "}") or ("@" .. e.key)
+		local insert
+		if format == "latex" then
+			insert = "\\cite{" .. e.key .. "}"
+		elseif format == "latex_key" then
+			insert = e.key .. "}"
+		else
+			insert = "@" .. e.key
+		end
 		local detail = table.concat(
 			vim.tbl_filter(function(s)
 				return s ~= ""
@@ -105,16 +112,37 @@ function Source.new()
 end
 
 function Source:get_trigger_characters()
-	return { "@" }
+	return { "@", "{" }
 end
 
 function Source:get_completions(ctx, callback)
 	local before = ctx.line:sub(1, ctx.cursor[2])
-	if not before:match("@[%w_%-:%.]*$") then
-		callback({ items = {}, is_incomplete_forward = false, is_incomplete_backward = false })
+
+	-- LaTeX citation trigger: \cite{...}
+	if before:match("\\[%a]*cite[%a]*%{$") then
+		callback({
+			items = citation_items("latex_key"),
+			is_incomplete_forward = false,
+			is_incomplete_backward = false,
+		})
 		return
 	end
-	callback({ items = current_items(), is_incomplete_forward = false, is_incomplete_backward = false })
+
+	-- Markdown / generic @cite trigger
+	if before:match("@[%w_%-:%.]*$") then
+		callback({
+			items = current_items(),
+			is_incomplete_forward = false,
+			is_incomplete_backward = false,
+		})
+		return
+	end
+
+	callback({
+		items = {},
+		is_incomplete_forward = false,
+		is_incomplete_backward = false,
+	})
 end
 
 function Source:enabled()
