@@ -131,9 +131,21 @@ function M.pick_citation(format, entries, ctx)
 
 	if format == "latex" then
 		win_input_keys["<C-l>"] = { "citeref_cycle_latex", mode = { "i", "n" } }
-		picker_actions["citeref_cycle_latex"] = function(_picker)
+		picker_actions["citeref_cycle_latex"] = function(picker)
 			latex_fmt = next_latex_format(latex_fmt.cmd)
-			vim.notify("citeref: LaTeX format → " .. latex_fmt.label, vim.log.levels.INFO)
+			for _, w in ipairs(vim.api.nvim_list_wins()) do
+				local ok, cfg = pcall(vim.api.nvim_win_get_config, w)
+				if ok and cfg.relative ~= "" and type(cfg.title) == "table" and #cfg.title > 0 then
+					-- Preserve the existing highlight group from the original title cell
+					local hl = type(cfg.title[1]) == "table" and cfg.title[1][2] or "Normal"
+					pcall(vim.api.nvim_win_set_config, w, {
+						title = { { current_title(), hl } },
+						title_pos = cfg.title_pos or "center",
+					})
+					break
+				end
+			end
+			-- vim.notify("citeref: LaTeX format → " .. latex_fmt.label, vim.log.levels.INFO)
 		end
 	end
 

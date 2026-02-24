@@ -204,27 +204,12 @@ function M.pick_citation(format, entries, ctx)
 				if format == "latex" then
 					map({ "i", "n" }, "<C-l>", function()
 						latex_fmt = next_latex_format(latex_fmt.cmd)
-						-- Telescope doesn't expose a live title-update API, so we notify
-						-- and re-set the prompt title via the picker object.
 						local picker = action_state.get_current_picker(prompt_bufnr)
-						-- prompt_title is read at creation time; update the border title instead
-						local win = picker.prompt_win
-						if win and vim.api.nvim_win_is_valid(win) then
-							local ok = pcall(function()
-								vim.api.nvim_win_call(win, function()
-									-- Update the winbar/border title through the prompt border buf
-									local border = picker.prompt_border
-									if border and border.win and vim.api.nvim_win_is_valid(border.win) then
-										local title_line = current_title()
-										pcall(vim.api.nvim_buf_set_lines, border.bufnr, 0, 1, false, { title_line })
-									end
-								end)
-							end)
-							if not ok then
-								vim.notify("citeref: LaTeX format → " .. latex_fmt.label, vim.log.levels.INFO)
-							end
+						local border = picker.prompt_border
+						if border and border.change_title then
+							border:change_title(current_title())
 						end
-						vim.notify("citeref: LaTeX format → " .. latex_fmt.label, vim.log.levels.INFO)
+						-- vim.notify("citeref: LaTeX format → " .. latex_fmt.label, vim.log.levels.INFO)
 					end)
 				end
 

@@ -162,18 +162,25 @@ function M.pick_citation(format, entries, ctx)
 		end, 100)
 	end
 
-	-- fzf runs inside a terminal buffer. The only reliable way to have a
-	-- side-effect keybind that does NOT close fzf is via winopts.on_create,
-	-- which fires after the terminal window is created. We register a
-	-- terminal-mode map (buffer = 0) there. The `actions` table is for binds
-	-- that accept/submit items — they always close fzf.
 	local on_create = nil
 	if format == "latex" then
+		local fzf_winid = nil
+
 		on_create = function()
+			-- Save the floating window id created by fzf-lua
+			fzf_winid = vim.api.nvim_get_current_win()
+
 			vim.keymap.set("t", "<C-l>", function()
 				latex_fmt = next_latex_format(latex_fmt.cmd)
-				vim.notify("citeref: LaTeX format → " .. latex_fmt.label, vim.log.levels.INFO)
-			end, { buffer = 0, nowait = true, desc = "citeref: cycle LaTeX format" })
+
+				if fzf_winid and vim.api.nvim_win_is_valid(fzf_winid) then
+					pcall(vim.api.nvim_win_set_config, fzf_winid, {
+						title = current_title(),
+					})
+				end
+
+				-- vim.notify("citeref: LaTeX format → " .. latex_fmt.label, vim.log.levels.INFO)
+			end, { buffer = 0, nowait = true })
 		end
 	end
 
