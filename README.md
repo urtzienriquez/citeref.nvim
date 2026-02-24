@@ -11,6 +11,7 @@ Contributions are very welcomed! See [Contributing](#contributing)
 - **One picker or completion backend** (required — no auto-detection):
   - [fzf-lua](https://github.com/ibhagwan/fzf-lua) — full fuzzy picker with preview
   - [telescope.nvim](https://github.com/nvim-telescope/telescope.nvim) — full fuzzy picker with preview
+  - [snacks.nvim](https://github.com/folke/snacks.nvim) — full fuzzy picker with preview
   - [blink.cmp](https://github.com/Saghen/blink.cmp) — completion menu
   - [nvim-cmp](https://github.com/hrsh7th/nvim-cmp) — completion menu
 
@@ -22,7 +23,7 @@ The `backend` option is **required**. citeref will warn on startup if it is not 
 
 citeref self-activates via a `FileType` autocommand — **`setup()` is optional for attachment, but required to set a backend**. When you open a supported filetype, the plugin attaches to that buffer and sets buffer-local keymaps. No external modules are loaded at this point.
 
-The backend is loaded lazily on your **first keypress**, not at startup. Picker backends (`fzf`, `telescope`) work in both insert and normal mode. Completion backends (`blink`, `cmp`) provide a menu and work in insert mode only — normal-mode keymaps will warn if a picker backend is not active.
+The backend is loaded lazily on your **first keypress**, not at startup. Picker backends (`fzf`, `telescope`, `snacks`) work in both insert and normal mode. Completion backends (`blink`, `cmp`) provide a menu and work in insert mode only — normal-mode keymaps will warn if a picker backend is not active.
 
 Without `setup()`, only `*.bib` files in the **current working directory** are used for citations. Set `bib_files` in `setup()` to include a global library.
 
@@ -38,7 +39,7 @@ Without `setup()`, only `*.bib` files in the **current working directory** are u
   ft = { "markdown", "rmd", "quarto", "rnoweb", "pandoc", "tex", "latex" },
   config = function()
     require("citeref").setup({
-      backend   = "fzf",   -- required: "fzf" | "telescope" | "blink" | "cmp"
+      backend   = "fzf",   -- required: "fzf" | "telescope" | "snacks" | "blink" | "cmp"
       bib_files = { "/path/to/your/library.bib" },
     })
   end,
@@ -96,6 +97,7 @@ require("citeref").setup({
   -- REQUIRED. No auto-detection — set one explicitly:
   --   "fzf"       → fzf-lua: full picker with preview, insert + normal mode
   --   "telescope" → telescope.nvim: full picker with preview, insert + normal mode
+  --   "snacks"    → snacks.nvim: full picker with preview, insert + normal mode
   --   "blink"     → blink.cmp: completion menu, insert mode only
   --   "cmp"       → nvim-cmp: completion menu, insert mode only
   backend = "fzf",
@@ -130,7 +132,13 @@ require("citeref").setup({
     crossref_table_n  = "<leader>at",  -- \@ref(tab:X)             (normal mode)
   },
 
-  -- fzf-lua / telescope picker appearance
+  -- Picker appearance.
+  -- `layout` meaning depends on the backend:
+  --   fzf / telescope → "vertical" | "horizontal"
+  --   snacks          → any snacks preset name:
+  --                     "default" | "vertical" | "horizontal" | "telescope" |
+  --                     "ivy" | "ivy_split" | "select" | "sidebar" | "vscode"
+  -- `preview_size` is used by fzf and telescope only.
   picker = {
     layout       = "vertical",
     preview_size = "50%",
@@ -172,7 +180,7 @@ vim.api.nvim_create_autocmd("FileType", {
 | insert | `<C-a>t`      | Insert table crossref `\@ref(tab:X)`  | any backend    |
 | normal | `<leader>at`  | Insert table crossref `\@ref(tab:X)`  | picker backend |
 
-Normal-mode keymaps with a completion backend show a warning — there is no picker equivalent for normal mode without fzf-lua or telescope.
+Normal-mode keymaps with a completion backend show a warning — there is no picker equivalent for normal mode without fzf-lua, telescope, or snacks.
 
 ---
 
@@ -285,6 +293,7 @@ lua/citeref/
     init.lua            Backend registry and lazy loader
     fzf.lua             fzf-lua picker (citations, crossrefs, replace)
     telescope.lua       telescope.nvim picker (citations, crossrefs, replace)
+    snacks.lua          snacks.nvim picker (citations, crossrefs, replace)
     blink.lua           blink.cmp completion source
     cmp.lua             nvim-cmp completion source
 plugin/
