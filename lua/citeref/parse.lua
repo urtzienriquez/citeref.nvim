@@ -309,22 +309,28 @@ end
 ---@field is_current boolean
 ---@field header     string
 
+local CHUNK_LANGS = { r = true, python = true, julia = true, ojs = true, observable = true }
+
 --- Check if a line is a chunk fence opener (```{r ...} or ```{r}).
 --- Returns true if so, along with any inline label found on that line.
 ---@param line string
 ---@return boolean is_fence
 ---@return string inline_label  empty string if none on this line
 local function is_chunk_fence(line)
-	if not line:match("^```{r") then
+	local lang = line:match("^```{(%a+)")
+	if not lang or not CHUNK_LANGS[lang:lower()] then
 		return false, ""
 	end
-	-- ```{r} or ```{r, ...} — no inline label
-	if line:match("^```{r%s*[,}]") then
-		return true, ""
+	-- R supports an optional inline label: ```{r label} or ```{r label, ...}
+	-- All other languages (python, julia, …) use #| label: only.
+	if lang:lower() == "r" then
+		if line:match("^```{r%s*[,}]") then
+			return true, ""
+		end
+		local label = line:match("^```{r%s+([^%s,}]+)")
+		return true, label or ""
 	end
-	-- ```{r label} or ```{r label, ...}
-	local label = line:match("^```{r%s+([^%s,}]+)")
-	return true, label or ""
+	return true, ""
 end
 
 --- Scan lines after a fence opener for a `#| label: name` YAML option.

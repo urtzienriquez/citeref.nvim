@@ -1,0 +1,36 @@
+---
+title: "Julia Quarto Test Doc"
+---
+
+```{julia}
+#| label: fig-lineplot
+#| fig-cap: "A line plot"
+#| fig-width: 4
+#| fig-height: 2
+
+using Plots
+plot([1, 2, 3], [1, 4, 9])
+```
+
+```{julia}
+#| label: tbl-data
+#| tbl-cap: "A data table"
+
+using DataFrames
+df = DataFrame(a = [1, 2], b = [3, 4])
+println(df)
+```
+
+```{julia}
+# No label — unnamed chunk
+x = 42
+println(x)
+```
+
+```{julia}
+#| echo: false
+#| label: fig-histogram
+
+using Plots
+histogram(randn(100))
+```

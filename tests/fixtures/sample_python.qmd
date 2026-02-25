@@ -1,0 +1,38 @@
+---
+title: "Python Quarto Test Doc"
+---
+
+```{python}
+#| label: fig-scatter
+#| fig-cap: "A scatter plot"
+#| fig-width: 4
+#| fig-height: 2
+#| fig-align: "center"
+
+import matplotlib.pyplot as plt
+plt.plot([1, 2, 3], [1, 4, 9])
+plt.show()
+```
+
+```{python}
+#| label: tbl-summary
+#| tbl-cap: "A summary table"
+
+import pandas as pd
+print(pd.DataFrame({"a": [1, 2], "b": [3, 4]}))
+```
+
+```{python}
+# No label — unnamed chunk
+x = 42
+print(x)
+```
+
+```{python}
+#| echo: false
+#| label: fig-hist
+
+import matplotlib.pyplot as plt
+plt.hist([1, 2, 2, 3, 3, 3])
+plt.show()
+```
