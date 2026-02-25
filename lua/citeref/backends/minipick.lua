@@ -27,11 +27,8 @@ end
 -- Shared helpers
 -- ─────────────────────────────────────────────────────────────
 
---- mini.pick items are plain strings shown in the picker list.
---- We keep a parallel lookup table keyed by display string.
-
 ---@param entries CiterefEntry[]
----@param current_key? string   highlight the current citation in replace mode
+---@param current_key? string
 ---@return string[], table<string, CiterefEntry>
 local function citation_display_list(entries, current_key)
 	local items = {}
@@ -59,11 +56,54 @@ local function chunk_display_list(chunks)
 	return items, lookup
 end
 
---- Render a CiterefEntry into lines for the preview window.
 ---@param entry CiterefEntry
 ---@return string[]
 local function entry_preview_lines(entry)
 	return vim.split(parse.entry_preview(entry), "\n")
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Core insertion helper
+-- ─────────────────────────────────────────────────────────────
+
+--- mini.pick's choose callback fires after the picker window has already
+--- closed. Neovim is always in normal mode at that point regardless of the
+--- mode before the picker opened. Use vim.schedule to let picker teardown
+--- finish, then insert directly and optionally re-enter insert mode.
+---@param ctx table
+---@param text string
+local function insert_after_pick(ctx, text)
+	vim.schedule(function()
+		if ctx.win and vim.api.nvim_win_is_valid(ctx.win) then
+			pcall(vim.api.nvim_set_current_win, ctx.win)
+		end
+		if ctx.buf and vim.api.nvim_buf_is_valid(ctx.buf) then
+			pcall(vim.api.nvim_set_current_buf, ctx.buf)
+		end
+
+		local row = ctx.row
+		-- After picker closes we are in normal mode, so insert after the char
+		-- at ctx.col (same +1 offset insert_at_context uses for normal mode).
+		local col = ctx.col + 1
+
+		local ok, err = pcall(vim.api.nvim_buf_set_text, ctx.buf, row - 1, col, row - 1, col, { text })
+		if not ok then
+			pcall(vim.api.nvim_put, { text }, "c", false, true)
+			vim.notify("citeref: inserted " .. text, vim.log.levels.INFO)
+			return
+		end
+
+		local new_col = col + #text
+		local line = vim.api.nvim_buf_get_lines(ctx.buf, row - 1, row, false)[1] or ""
+		new_col = math.min(new_col, math.max(0, #line - 1))
+		pcall(vim.api.nvim_win_set_cursor, ctx.win or 0, { row, new_col })
+
+		if ctx.was_insert_mode then
+			vim.cmd("startinsert")
+		end
+
+		vim.notify("citeref: inserted " .. text, vim.log.levels.INFO)
+	end)
 end
 
 -- ─────────────────────────────────────────────────────────────
@@ -93,90 +133,68 @@ function M.pick_citation(format, entries, ctx)
 		end
 	end
 
+	local function build_text(keys)
+		table.sort(keys)
+		if format == "latex" then
+			return format_latex(keys, latex_fmt.cmd)
+		else
+			return parse.format_citation(keys)
+		end
+	end
+
 	local items, lookup = citation_display_list(entries)
 
-	-- Build a mappings table; <C-l> cycles the LaTeX format (no-op for markdown).
-	-- mini.pick mappings receive (picker_obj, query) and must return false to keep
-	-- the picker open or nil/true to close it.
 	local mappings = {}
 	if format == "latex" then
 		mappings["<C-l>"] = {
 			char = "<C-l>",
 			func = function()
 				latex_fmt = next_latex_format(latex_fmt.cmd)
-				-- Update the picker name shown in the window border/header.
-				-- MiniPick exposes set_picker_opts() to mutate live options.
 				MiniPick.set_picker_opts({ source = { name = current_name() } })
 				vim.notify("citeref: " .. latex_fmt.label, vim.log.levels.INFO)
-				-- Return false = keep picker open
-				return false
+				return false -- keep picker open
 			end,
 		}
 	end
 
-	local chosen = MiniPick.start({
+	MiniPick.start({
 		source = {
 			name = current_name(),
 			items = items,
 			preview = function(buf_id, item)
 				local e = lookup[item]
 				if e then
+					vim.bo[buf_id].modifiable = true
 					vim.api.nvim_buf_set_lines(buf_id, 0, -1, false, entry_preview_lines(e))
 				end
 			end,
-			-- choose_marked is called when the user marks entries (with <C-x> by default)
-			-- and confirms; choose is called for a single selection.
 			choose = function(item)
-				if not item then
-					return
-				end
-				local e = lookup[item]
-				if not e then
-					return
-				end
-
-				local text
-				if format == "latex" then
-					text = format_latex({ e.key }, latex_fmt.cmd)
-				else
-					text = parse.format_citation({ e.key })
-				end
-
-				vim.cmd("stopinsert")
-				vim.schedule(function()
-					util.insert_at_context(ctx, text)
-					vim.notify("citeref: inserted " .. text, vim.log.levels.INFO)
-				end)
-			end,
-
-			choose_marked = function(marked_items)
-				if not marked_items or #marked_items == 0 then
-					return
-				end
+				-- MiniPick.get_picker_matches() must be called HERE, inside choose,
+				-- before the picker closes and the state is torn down.
+				-- .marked is a list of the items marked with <C-x>.
+				-- If nothing is marked, fall back to the single focused item.
 				local keys = {}
-				for _, item in ipairs(marked_items) do
-					local e = lookup[item]
+				local ok, matches = pcall(MiniPick.get_picker_matches)
+				local marked = ok and matches and matches.marked or {}
+
+				if #marked > 0 then
+					for _, marked_item in ipairs(marked) do
+						local e = lookup[marked_item]
+						if e then
+							keys[#keys + 1] = e.key
+						end
+					end
+				else
+					local e = item and lookup[item]
 					if e then
 						keys[#keys + 1] = e.key
 					end
 				end
+
 				if #keys == 0 then
 					return
 				end
-				table.sort(keys)
-
-				local text
-				if format == "latex" then
-					text = format_latex(keys, latex_fmt.cmd)
-				else
-					text = parse.format_citation(keys)
-				end
-
-				vim.cmd("stopinsert")
-				vim.schedule(function()
-					util.insert_at_context(ctx, text)
-					vim.notify("citeref: inserted " .. text, vim.log.levels.INFO)
-				end)
+				insert_after_pick(ctx, build_text(keys))
 			end,
 		},
 		mappings = mappings,
@@ -201,8 +219,10 @@ function M.replace(entries, info)
 			name = "Replace @" .. info.key,
 			items = items,
 			preview = function(buf_id, item)
-				local e = lookup[item]
+				local stripped = item:gsub(" %(current%)$", "")
+				local e = lookup[item] or lookup[stripped]
 				if e then
+					vim.bo[buf_id].modifiable = true
 					vim.api.nvim_buf_set_lines(buf_id, 0, -1, false, entry_preview_lines(e))
 				end
 			end,
@@ -210,35 +230,31 @@ function M.replace(entries, info)
 				if not item then
 					return
 				end
-				local e = lookup[item]
-				-- Strip " (current)" suffix that was added for display
-				if not e then
-					local stripped = item:gsub(" %(current%)$", "")
-					e = lookup[stripped]
-				end
+				local stripped = item:gsub(" %(current%)$", "")
+				local e = lookup[item] or lookup[stripped]
 				if not e or e.key == info.key then
-					vim.defer_fn(function()
+					vim.schedule(function()
 						vim.notify("citeref: same citation selected – no change", vim.log.levels.INFO)
-					end, 100)
+					end)
 					return
 				end
 				local replacement = info.style == "latex" and e.key or ("@" .. e.key)
-				local ok, err = pcall(
-					vim.api.nvim_buf_set_text,
-					buf,
-					row - 1,
-					info.start_col,
-					row - 1,
-					info.end_col + 1,
-					{ replacement }
-				)
-				vim.defer_fn(function()
+				vim.schedule(function()
+					local ok, err = pcall(
+						vim.api.nvim_buf_set_text,
+						buf,
+						row - 1,
+						info.start_col,
+						row - 1,
+						info.end_col + 1,
+						{ replacement }
+					)
 					if ok then
 						vim.notify(string.format("citeref: %s → %s", info.key, e.key), vim.log.levels.INFO)
 					else
 						vim.notify("citeref: replacement failed – " .. tostring(err), vim.log.levels.ERROR)
 					end
-				end, 100)
+				end)
 			end,
 		},
 	})
@@ -257,9 +273,6 @@ function M.pick_crossref(ref_type, chunks, ctx)
 
 	local items, lookup = chunk_display_list(chunks)
 
-	-- Build a per-item file previewer: open the source file at the chunk's line.
-	-- mini.pick's built-in file previewer is invoked via MiniPick.default_preview(),
-	-- but we need to jump to the right line ourselves.
 	MiniPick.start({
 		source = {
 			name = title,
@@ -270,22 +283,16 @@ function M.pick_crossref(ref_type, chunks, ctx)
 					return
 				end
 				if chunk.file and chunk.file ~= "" and vim.fn.filereadable(chunk.file) == 1 then
-					-- Read the file and display it in the preview buffer, then
-					-- highlight the chunk header line.
-					local ok, lines = pcall(function()
-						return vim.fn.readfile(chunk.file)
-					end)
+					local ok, lines = pcall(vim.fn.readfile, chunk.file)
 					if ok and lines then
+						vim.bo[buf_id].modifiable = true
 						vim.api.nvim_buf_set_lines(buf_id, 0, -1, false, lines)
-						-- Attempt to set a reasonable filetype for syntax highlighting
 						local ext = chunk.file:match("%.([^%.]+)$") or ""
 						local ft_map = { rmd = "markdown", qmd = "markdown", Rmd = "markdown", Qmd = "markdown" }
 						pcall(function()
 							vim.bo[buf_id].filetype = ft_map[ext] or ext
 						end)
-						-- Scroll the preview window to the chunk line
 						vim.schedule(function()
-							-- Find a window displaying buf_id
 							for _, win in ipairs(vim.api.nvim_list_wins()) do
 								if vim.api.nvim_win_get_buf(win) == buf_id then
 									pcall(vim.api.nvim_win_set_cursor, win, { chunk.line, 0 })
@@ -298,7 +305,7 @@ function M.pick_crossref(ref_type, chunks, ctx)
 						end)
 					end
 				else
-					-- Unnamed chunk or unreadable file – just show the header line
+					vim.bo[buf_id].modifiable = true
 					vim.api.nvim_buf_set_lines(buf_id, 0, -1, false, { chunk.header or "(no preview)" })
 				end
 			end,
@@ -311,19 +318,16 @@ function M.pick_crossref(ref_type, chunks, ctx)
 					return
 				end
 				if chunk.label == "" then
-					vim.defer_fn(function()
+					vim.schedule(function()
 						vim.notify(
 							"citeref: chunk has no label – add a label to use it in a cross-reference",
 							vim.log.levels.WARN
 						)
-					end, 100)
+					end)
 					return
 				end
 				local crossref = parse.format_crossref(ref_type, chunk.label, ctx.bufnr)
-				util.insert_at_context(ctx, crossref)
-				vim.defer_fn(function()
-					vim.notify("citeref: inserted " .. crossref, vim.log.levels.INFO)
-				end, 100)
+				insert_after_pick(ctx, crossref)
 			end,
 		},
 	})
