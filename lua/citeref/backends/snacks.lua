@@ -116,16 +116,12 @@ function M.pick_citation(format, entries, ctx)
 
 	local function current_title()
 		if format == "latex" then
-			return string.format(" Citations [LaTeX: %s]  <C-l> cycle ", latex_fmt.label)
+			return string.format(" Citations %s [<C-l> cycle] ", latex_fmt.label)
 		else
-			return " Citations [Markdown] "
+			return " Citations @ "
 		end
 	end
 
-	-- Snacks picker keymaps work as: win.input.keys maps a key to an action
-	-- name (string), and the function lives in the top-level `actions` table.
-	-- Both must be present — the key binding alone won't work without the
-	-- action, and vice versa.
 	local win_input_keys = {}
 	local picker_actions = {}
 
@@ -136,7 +132,6 @@ function M.pick_citation(format, entries, ctx)
 			for _, w in ipairs(vim.api.nvim_list_wins()) do
 				local ok, cfg = pcall(vim.api.nvim_win_get_config, w)
 				if ok and cfg.relative ~= "" and type(cfg.title) == "table" and #cfg.title > 0 then
-					-- Preserve the existing highlight group from the original title cell
 					local hl = type(cfg.title[1]) == "table" and cfg.title[1][2] or "Normal"
 					pcall(vim.api.nvim_win_set_config, w, {
 						title = { { current_title(), hl } },
@@ -145,7 +140,6 @@ function M.pick_citation(format, entries, ctx)
 					break
 				end
 			end
-			-- vim.notify("citeref: LaTeX format → " .. latex_fmt.label, vim.log.levels.INFO)
 		end
 	end
 
@@ -300,7 +294,7 @@ function M.pick_crossref(ref_type, chunks, ctx)
 					)
 					return
 				end
-				local crossref = string.format("\\@ref(%s:%s)", ref_type, chunk.label)
+				local crossref = parse.format_crossref(ref_type, chunk.label, ctx.bufnr)
 				util.insert_at_context(ctx, crossref)
 				vim.notify("citeref: inserted " .. crossref, vim.log.levels.INFO)
 			end)

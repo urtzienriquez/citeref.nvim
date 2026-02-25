@@ -207,6 +207,24 @@ function M.format_citation(keys)
 end
 
 -- ─────────────────────────────────────────────────────────────
+-- Crossref format helper
+-- ─────────────────────────────────────────────────────────────
+
+--- Return the correct crossref insertion string for the current buffer's filetype.
+--- Quarto uses native @label syntax; R Markdown uses \@ref(fig:label) / \@ref(tab:label).
+---@param ref_type "fig"|"tab"
+---@param label string
+---@param bufnr? integer  defaults to current buffer
+---@return string
+function M.format_crossref(ref_type, label, bufnr)
+	local ft = vim.bo[bufnr or vim.api.nvim_get_current_buf()].filetype
+	if ft == "quarto" then
+		return "@" .. label
+	end
+	return string.format("\\@ref(%s:%s)", ref_type, label)
+end
+
+-- ─────────────────────────────────────────────────────────────
 -- Citation-under-cursor detection
 -- ─────────────────────────────────────────────────────────────
 
@@ -289,24 +307,46 @@ end
 ---@field is_current boolean
 ---@field header     string
 
+--- Check if a line is a chunk fence opener (```{r ...} or ```{r}).
+--- Returns true if so, along with any inline label found on that line.
 ---@param line string
----@return string|nil label
----@return string|nil header
-local function parse_chunk_header(line)
+---@return boolean is_fence
+---@return string inline_label  empty string if none on this line
+local function is_chunk_fence(line)
 	if not line:match("^```{r") then
-		return nil
+		return false, ""
 	end
-	if line:match("^```{r%s*}") then
-		return "", line
+	-- ```{r} or ```{r, ...} — no inline label
+	if line:match("^```{r%s*[,}]") then
+		return true, ""
 	end
-	if line:match("^```{r%s*,") then
-		return "", line
-	end
+	-- ```{r label} or ```{r label, ...}
 	local label = line:match("^```{r%s+([^%s,}]+)")
-	if label then
-		return label, line
+	return true, label or ""
+end
+
+--- Scan lines after a fence opener for a `#| label: name` YAML option.
+--- `all_lines` is a list; `start` is the 1-based index of the line *after* the fence.
+---@param all_lines string[]
+---@param start integer
+---@return string  label (empty string if not found)
+local function find_yaml_label(all_lines, start)
+	for i = start, math.min(start + 20, #all_lines) do
+		local l = all_lines[i]
+		-- Stop at the closing fence or a non-option line (no leading #|)
+		if l:match("^```") then
+			break
+		end
+		local yaml_label = l:match("^#|%s*label:%s*([%w_%-%.]+)")
+		if yaml_label then
+			return yaml_label
+		end
+		-- A non-comment, non-blank line inside the chunk means no more YAML options
+		if not l:match("^%s*$") and not l:match("^#|") then
+			break
+		end
 	end
-	return "", line
+	return ""
 end
 
 ---@param bufnr integer
@@ -318,9 +358,17 @@ local function chunks_from_buf(bufnr)
 	local fname = vim.fn.fnamemodify(path, ":t")
 	local unnamed_count = 0
 
-	for i, line in ipairs(lines) do
-		local label, header = parse_chunk_header(line)
-		if label ~= nil then
+	local i = 1
+	while i <= #lines do
+		local line = lines[i]
+		local is_fence, inline_label = is_chunk_fence(line)
+		if is_fence then
+			local label = inline_label
+			-- If no inline label, look for #| label: on subsequent lines
+			if label == "" then
+				label = find_yaml_label(lines, i + 1)
+			end
+
 			local display
 			if label == "" then
 				unnamed_count = unnamed_count + 1
@@ -334,9 +382,10 @@ local function chunks_from_buf(bufnr)
 				line = i,
 				file = path,
 				is_current = true,
-				header = header,
+				header = line,
 			}
 		end
+		i = i + 1
 	end
 	return chunks
 end
@@ -350,14 +399,24 @@ local function chunks_from_file(filepath)
 		return chunks
 	end
 
+	-- Read all lines so we can look ahead for #| label:
+	local all_lines = {}
+	for l in file:lines() do
+		all_lines[#all_lines + 1] = l
+	end
+	file:close()
+
 	local fname = vim.fn.fnamemodify(filepath, ":t")
-	local i = 0
 	local unnamed_count = 0
 
-	for line in file:lines() do
-		i = i + 1
-		local label, header = parse_chunk_header(line)
-		if label ~= nil then
+	for i, line in ipairs(all_lines) do
+		local is_fence, inline_label = is_chunk_fence(line)
+		if is_fence then
+			local label = inline_label
+			if label == "" then
+				label = find_yaml_label(all_lines, i + 1)
+			end
+
 			local display
 			if label == "" then
 				unnamed_count = unnamed_count + 1
@@ -371,11 +430,10 @@ local function chunks_from_file(filepath)
 				line = i,
 				file = filepath,
 				is_current = false,
-				header = header,
+				header = line,
 			}
 		end
 	end
-	file:close()
 	return chunks
 end
 

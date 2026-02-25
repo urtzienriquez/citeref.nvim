@@ -22,46 +22,50 @@ end
 local KIND = { Reference = 18, Value = 12, Field = 5 }
 
 local function citation_items(format)
-    local entries = parse.load_entries()
-    local items = {}
-    for _, e in ipairs(entries) do
-        local insert
-        if format == "latex" then
-            insert = "\\cite{" .. e.key .. "}"
-        elseif format == "latex_key" then
-            insert = e.key .. "}"  -- user already typed \cite{, just need the key; they close with }
-        else
-            insert = "@" .. e.key
-        end
-        local detail = table.concat(
-            vim.tbl_filter(function(s) return s ~= "" end,
-            { e.author, e.year, e.journaltitle }), " · ")
-        items[#items + 1] = {
-            label         = e.key,
-            kind          = KIND.Reference,
-            detail        = detail ~= "" and detail or nil,
-            documentation = e.title ~= "" and {
-                kind  = "plaintext",
-                value = e.title .. (e.abstract ~= "" and ("\n\n" .. e.abstract) or ""),
-            } or nil,
-            insertText    = insert,
-            data          = { type = "citation", key = e.key, format = format },
-        }
-    end
-    return items
+	local entries = parse.load_entries()
+	local items = {}
+	for _, e in ipairs(entries) do
+		local insert
+		if format == "latex" then
+			insert = "\\cite{" .. e.key .. "}"
+		elseif format == "latex_key" then
+			insert = e.key .. "}" -- user already typed \cite{, just need the key; they close with }
+		else
+			insert = "@" .. e.key
+		end
+		local detail = table.concat(
+			vim.tbl_filter(function(s)
+				return s ~= ""
+			end, { e.author, e.year, e.journaltitle }),
+			" · "
+		)
+		items[#items + 1] = {
+			label = e.key,
+			kind = KIND.Reference,
+			detail = detail ~= "" and detail or nil,
+			documentation = e.title ~= "" and {
+				kind = "plaintext",
+				value = e.title .. (e.abstract ~= "" and ("\n\n" .. e.abstract) or ""),
+			} or nil,
+			insertText = insert,
+			data = { type = "citation", key = e.key, format = format },
+		}
+	end
+	return items
 end
 
 local function crossref_items(ref_type)
 	local chunks = parse.load_chunks()
+	local bufnr = vim.api.nvim_get_current_buf()
 	local items = {}
 	for _, c in ipairs(chunks) do
 		local insert, detail, kind_val
 		if c.label == "" then
 			insert = "[unnamed chunk · line " .. c.line .. " · " .. vim.fn.fnamemodify(c.file, ":t") .. "]"
-			detail = "⚠ needs a label to use in \\@ref(" .. ref_type .. ":...)"
+			detail = "⚠ needs a label to use in a cross-reference"
 			kind_val = KIND.Field
 		else
-			insert = "\\@ref(" .. ref_type .. ":" .. c.label .. ")"
+			insert = parse.format_crossref(ref_type, c.label, bufnr)
 			detail = ref_type
 				.. " · line "
 				.. c.line

@@ -73,7 +73,11 @@ function M.crossref_figure()
 			vim.notify("citeref: no code chunks found.", vim.log.levels.WARN)
 			return
 		end
-		registry.call("pick_crossref", "fig", chunks, require("citeref.util").save_context())
+		-- Capture filetype now (before picker opens and focus changes)
+		local bufnr = vim.api.nvim_get_current_buf()
+		local ctx = require("citeref.util").save_context()
+		ctx.bufnr = bufnr
+		registry.call("pick_crossref", "fig", chunks, ctx)
 	elseif insert_mode() then
 		registry.call("show", "crossref_fig")
 	else
@@ -88,7 +92,10 @@ function M.crossref_table()
 			vim.notify("citeref: no code chunks found.", vim.log.levels.WARN)
 			return
 		end
-		registry.call("pick_crossref", "tab", chunks, require("citeref.util").save_context())
+		local bufnr = vim.api.nvim_get_current_buf()
+		local ctx = require("citeref.util").save_context()
+		ctx.bufnr = bufnr
+		registry.call("pick_crossref", "tab", chunks, ctx)
 	elseif insert_mode() then
 		registry.call("show", "crossref_tab")
 	else

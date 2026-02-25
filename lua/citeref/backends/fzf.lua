@@ -128,9 +128,9 @@ function M.pick_citation(format, entries, ctx)
 
 	local function current_title()
 		if format == "latex" then
-			return string.format(" Citations [LaTeX: %s]  <C-l> cycle ", latex_fmt.label)
+			return string.format(" Citations %s [<C-l> cycle] ", latex_fmt.label)
 		else
-			return " Citations [Markdown] "
+			return " Citations @ "
 		end
 	end
 
@@ -178,8 +178,6 @@ function M.pick_citation(format, entries, ctx)
 						title = { { current_title(), "FzfLuaTitle" } },
 					})
 				end
-
-				-- vim.notify("citeref: LaTeX format → " .. latex_fmt.label, vim.log.levels.INFO)
 			end, { buffer = 0, nowait = true })
 		end
 	end
@@ -333,7 +331,7 @@ function M.pick_crossref(ref_type, chunks, ctx)
 					end, 100)
 					return
 				end
-				local crossref = string.format("\\@ref(%s:%s)", ref_type, chunk.label)
+				local crossref = parse.format_crossref(ref_type, chunk.label, ctx.bufnr)
 				util.insert_at_context(ctx, crossref)
 				vim.defer_fn(function()
 					vim.notify("citeref: inserted " .. crossref, vim.log.levels.INFO)

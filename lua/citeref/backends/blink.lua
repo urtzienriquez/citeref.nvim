@@ -56,15 +56,16 @@ end
 
 local function crossref_items(ref_type)
 	local chunks = parse.load_chunks()
+	local bufnr = vim.api.nvim_get_current_buf()
 	local items = {}
 	for _, c in ipairs(chunks) do
 		local insert, detail, kind_val
 		if c.label == "" then
 			insert = "[unnamed chunk · line " .. c.line .. " · " .. vim.fn.fnamemodify(c.file, ":t") .. "]"
-			detail = "⚠ needs a label to use in \\@ref(" .. ref_type .. ":...)"
+			detail = "⚠ needs a label to use in a cross-reference"
 			kind_val = KIND.Field
 		else
-			insert = "\\@ref(" .. ref_type .. ":" .. c.label .. ")"
+			insert = parse.format_crossref(ref_type, c.label, bufnr)
 			detail = ref_type
 				.. " · line "
 				.. c.line
