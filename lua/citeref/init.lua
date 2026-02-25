@@ -7,7 +7,7 @@ local M = {}
 
 local function is_picker()
 	local b = require("citeref.config").get().backend
-	return b == "fzf" or b == "telescope" or b == "snacks"
+	return b == "fzf" or b == "telescope" or b == "snacks" or b == "minipick"
 end
 
 local function insert_mode()
@@ -31,7 +31,10 @@ function M.cite_markdown()
 	elseif insert_mode() then
 		registry.call("show", "citation", "markdown")
 	else
-		vim.notify("citeref: normal-mode cite requires a picker backend (fzf or telescope).", vim.log.levels.WARN)
+		vim.notify(
+			"citeref: normal-mode cite requires a picker backend (fzf, telescope, snacks, or minipick).",
+			vim.log.levels.WARN
+		)
 	end
 end
 
@@ -45,13 +48,19 @@ function M.cite_latex()
 	elseif insert_mode() then
 		registry.call("show", "citation", "latex")
 	else
-		vim.notify("citeref: normal-mode cite requires a picker backend (fzf or telescope).", vim.log.levels.WARN)
+		vim.notify(
+			"citeref: normal-mode cite requires a picker backend (fzf, telescope, snacks, or minipick).",
+			vim.log.levels.WARN
+		)
 	end
 end
 
 function M.cite_replace()
 	if not is_picker() then
-		vim.notify("citeref: cite_replace requires a picker backend (fzf or telescope).", vim.log.levels.WARN)
+		vim.notify(
+			"citeref: cite_replace requires a picker backend (fzf, telescope, snacks, or minipick).",
+			vim.log.levels.WARN
+		)
 		return
 	end
 	local info = parse.citation_under_cursor()
@@ -81,7 +90,10 @@ function M.crossref_figure()
 	elseif insert_mode() then
 		registry.call("show", "crossref_fig")
 	else
-		vim.notify("citeref: normal-mode crossref requires a picker backend (fzf or telescope).", vim.log.levels.WARN)
+		vim.notify(
+			"citeref: normal-mode crossref requires a picker backend (fzf, telescope, snacks, or minipick).",
+			vim.log.levels.WARN
+		)
 	end
 end
 
@@ -99,7 +111,10 @@ function M.crossref_table()
 	elseif insert_mode() then
 		registry.call("show", "crossref_tab")
 	else
-		vim.notify("citeref: normal-mode crossref requires a picker backend (fzf or telescope).", vim.log.levels.WARN)
+		vim.notify(
+			"citeref: normal-mode crossref requires a picker backend (fzf, telescope, snacks, or minipick).",
+			vim.log.levels.WARN
+		)
 	end
 end
 

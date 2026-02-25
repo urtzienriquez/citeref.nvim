@@ -1,6 +1,6 @@
 --- citeref.nvim – configuration defaults and merging
 ---@class CiterefConfig
----@field backend "fzf"|"telescope"|"snacks"|"blink"|"cmp"  Required – no auto-detection
+---@field backend "fzf"|"telescope"|"snacks"|"minipick"|"blink"|"cmp"  Required – no auto-detection
 ---@field filetypes string[]
 ---@field bib_files string[]|fun():string[]
 ---@field keymaps CiterefKeymapConfig
@@ -24,6 +24,7 @@
 ---   fzf / telescope: "vertical" | "horizontal"
 ---   snacks:          any preset name — "default" | "vertical" | "horizontal" |
 ---                    "telescope" | "ivy" | "ivy_split" | "select" | "sidebar" | "vscode"
+---   minipick:        not used (mini.pick uses its own global config)
 ---@field preview_size string   (fzf / telescope only)
 
 local M = {}
@@ -34,6 +35,7 @@ M.defaults = {
 	--   "fzf"       → fzf-lua: full picker with preview, insert + normal mode
 	--   "telescope" → telescope.nvim: full picker with preview, insert + normal mode
 	--   "snacks"    → snacks.nvim: full picker with preview, insert + normal mode
+	--   "minipick"  → mini.pick: full picker with preview, insert + normal mode
 	--   "blink"     → blink.cmp: completion menu, insert mode only
 	--   "cmp"       → nvim-cmp: completion menu, insert mode only
 	backend = nil,
@@ -72,6 +74,7 @@ M.defaults = {
 		-- fzf / telescope: "vertical" | "horizontal"
 		-- snacks: any preset name — "default" | "vertical" | "horizontal" |
 		--         "telescope" | "ivy" | "ivy_split" | "select" | "sidebar" | "vscode"
+		-- minipick: not used (mini.pick layout is controlled via MiniPick.config)
 		layout = "vertical",
 		preview_size = "50%", -- fzf / telescope only
 	},
@@ -81,7 +84,7 @@ M.defaults = {
 M.options = {}
 local _initialized = false
 
-local VALID_BACKENDS = { fzf = true, telescope = true, snacks = true, blink = true, cmp = true }
+local VALID_BACKENDS = { fzf = true, telescope = true, snacks = true, minipick = true, blink = true, cmp = true }
 
 local VALID_LATEX_FORMATS = {
 	cite = true,
@@ -104,7 +107,7 @@ function M.set(opts)
 	if M.options.backend == nil then
 		vim.notify(
 			"citeref: backend is not set.\n"
-				.. "  Add backend = 'fzf', 'telescope', 'snacks', 'blink', or 'cmp' to your setup() call.",
+				.. "  Add backend = 'fzf', 'telescope', 'snacks', 'minipick', 'blink', or 'cmp' to your setup() call.",
 			vim.log.levels.WARN
 		)
 	elseif not VALID_BACKENDS[M.options.backend] then
@@ -112,7 +115,7 @@ function M.set(opts)
 			"citeref: unknown backend '"
 				.. tostring(M.options.backend)
 				.. "'.\n"
-				.. "  Valid values: 'fzf', 'telescope', 'snacks', 'blink', 'cmp'.",
+				.. "  Valid values: 'fzf', 'telescope', 'snacks', 'minipick', 'blink', 'cmp'.",
 			vim.log.levels.ERROR
 		)
 	end
