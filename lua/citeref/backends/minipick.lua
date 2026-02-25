@@ -1,5 +1,4 @@
 --- citeref.nvim – mini.pick backend
-local util = require("citeref.util")
 local parse = require("citeref.parse")
 
 local M = {}
@@ -86,7 +85,7 @@ local function insert_after_pick(ctx, text)
 		-- at ctx.col (same +1 offset insert_at_context uses for normal mode).
 		local col = ctx.col + 1
 
-		local ok, err = pcall(vim.api.nvim_buf_set_text, ctx.buf, row - 1, col, row - 1, col, { text })
+		local ok = pcall(vim.api.nvim_buf_set_text, ctx.buf, row - 1, col, row - 1, col, { text })
 		if not ok then
 			pcall(vim.api.nvim_put, { text }, "c", false, true)
 			vim.notify("citeref: inserted " .. text, vim.log.levels.INFO)
