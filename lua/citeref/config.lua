@@ -1,8 +1,8 @@
 --- citeref.nvim – configuration defaults and merging
 ---@class CiterefConfig
----@field backend "fzf"|"telescope"|"snacks"|"minipick"|"blink"|"cmp"  Required – no auto-detection
+---@field backend? "fzf"|"telescope"|"snacks"|"minipick"|"blink"|"cmp"  Required – no auto-detection
 ---@field filetypes string[]
----@field bib_files string[]|fun():string[]
+---@field bib_files? string[]|fun():string[]
 ---@field keymaps CiterefKeymapConfig
 ---@field picker CiterefPickerConfig
 ---@field default_latex_format string  Default LaTeX cite command (e.g. "cite", "citep", "citet")
@@ -80,8 +80,8 @@ M.defaults = {
 	},
 }
 
----@type CiterefConfig
-M.options = {}
+---@type CiterefConfig?
+M.options = nil
 local _initialized = false
 
 local VALID_BACKENDS = { fzf = true, telescope = true, snacks = true, minipick = true, blink = true, cmp = true }
