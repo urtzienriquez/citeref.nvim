@@ -4,6 +4,8 @@
 
 > A Neovim plugin for inserting **citations** (from `.bib` files) and **cross-references** (to R/Quarto code chunks).
 
+[![Tests](https://github.com/urtzienriquez/citeref.nvim/actions/workflows/test.yml/badge.svg)](https://github.com/urtzienriquez/citeref.nvim/actions/workflows/test.yml)
+
 </div>
 
 citeref.nvim lets you search your BibTeX library and insert formatted citations without leaving Neovim, and browse the named code chunks in your R Markdown or Quarto documents to insert figure and table cross-references. It works with your existing fuzzy picker and/or completion plugin — no new UI to learn.
