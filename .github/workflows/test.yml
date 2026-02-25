@@ -39,4 +39,4 @@ jobs:
           nvim --headless \
                -u tests/minimal_init.lua \
                +"PlenaryBustedDirectory tests/ {sequential=true}" 2>&1 | tee /tmp/test-output.txt
-          grep -q "Failure\|Error" /tmp/test-output.txt && exit 1 || exit 0
+          grep -qE "^Failed\s*:\s*[^0]|^Errors\s*:\s*[^0]" /tmp/test-output.txt && exit 1 || exit 0
