@@ -1,6 +1,5 @@
 --- citeref.nvim – nvim-cmp backend
 local parse = require("citeref.parse")
-
 local M = {}
 
 -- ─────────────────────────────────────────────────────────────
@@ -40,7 +39,7 @@ local function citation_items(format)
 			" · "
 		)
 		items[#items + 1] = {
-			label = e.key,
+			label = insert,
 			kind = KIND.Reference,
 			detail = detail ~= "" and detail or nil,
 			documentation = e.title ~= "" and {
@@ -83,6 +82,33 @@ local function crossref_items(ref_type)
 	return items
 end
 
+--- In Quarto, crossrefs use plain `@label` regardless of fig/tab type,
+--- so each chunk should appear exactly once rather than twice.
+local function crossref_items_quarto()
+	local chunks = parse.load_chunks()
+	local items = {}
+	for _, c in ipairs(chunks) do
+		local insert, detail, kind_val
+		if c.label == "" then
+			insert = "[unnamed chunk · line " .. c.line .. " · " .. vim.fn.fnamemodify(c.file, ":t") .. "]"
+			detail = "⚠ needs a label to use in a cross-reference"
+			kind_val = KIND.Field
+		else
+			insert = "@" .. c.label
+			detail = "chunk · line " .. c.line .. (c.is_current and "" or " · " .. vim.fn.fnamemodify(c.file, ":t"))
+			kind_val = KIND.Value
+		end
+		items[#items + 1] = {
+			label = insert,
+			kind = kind_val,
+			detail = detail,
+			insertText = c.label ~= "" and insert or "",
+			data = { type = "crossref", label = c.label, line = c.line, file = c.file },
+		}
+	end
+	return items
+end
+
 local function current_items()
 	if _mode == "citation" then
 		return citation_items(_format)
@@ -93,10 +119,17 @@ local function current_items()
 	if _mode == "crossref_tab" then
 		return crossref_items("tab")
 	end
+	-- "all": in Quarto emit each chunk once; in rmarkdown keep fig+tab separate
+	local bufnr = vim.api.nvim_get_current_buf()
+	local ft = vim.bo[bufnr].filetype
 	local items = {}
 	vim.list_extend(items, citation_items("markdown"))
-	vim.list_extend(items, crossref_items("fig"))
-	vim.list_extend(items, crossref_items("tab"))
+	if ft == "quarto" then
+		vim.list_extend(items, crossref_items_quarto())
+	else
+		vim.list_extend(items, crossref_items("fig"))
+		vim.list_extend(items, crossref_items("tab"))
+	end
 	return items
 end
 
@@ -125,13 +158,37 @@ end
 
 function Source:complete(request, callback)
 	local before = request.context.cursor_before_line
+	local bufnr = vim.api.nvim_get_current_buf()
+	local ft = vim.bo[bufnr].filetype
+
+	-- LaTeX citation trigger: \cite{...}
 	if before:match("\\[%a]*cite[%a]*%{$") then
 		callback({ items = citation_items("latex_key"), isIncomplete = false })
-	elseif before:match("@[%w_%-:%.]*$") then
-		callback({ items = current_items(), isIncomplete = false })
-	else
-		callback({ items = {}, isIncomplete = false })
+		return
 	end
+
+	-- R Markdown crossref trigger: fires from \@ onward, covering \@, \@ref, \@ref(, \@ref(partial.
+	-- Must be checked before the plain @ trigger to avoid the @ in \@ matching citations.
+	if ft ~= "quarto" and before:match("\\@%a*%(?[%w_%-%.]*$") then
+		local items = {}
+		vim.list_extend(items, crossref_items("fig"))
+		vim.list_extend(items, crossref_items("tab"))
+		callback({ items = items, isIncomplete = false })
+		return
+	end
+
+	-- @ trigger: citations in all filetypes; crossrefs too in Quarto.
+	-- Guard against matching the @ inside \@ sequences handled above.
+	if before:match("@[%w_%-:%.]*$") and not before:match("\\@") then
+		if ft == "quarto" then
+			callback({ items = current_items(), isIncomplete = false })
+		else
+			callback({ items = citation_items("markdown"), isIncomplete = false })
+		end
+		return
+	end
+
+	callback({ items = {}, isIncomplete = false })
 end
 
 -- ─────────────────────────────────────────────────────────────
