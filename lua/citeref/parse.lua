@@ -236,11 +236,13 @@ function M.citation_under_cursor()
 	-- Markdown @key
 	local pos = 1
 	while true do
-		local s, e = line:find("@[%w_%-:%.]+", pos)
+		local s, e = line:find("@[%w_:%-]+", pos)
 		if not s then
 			break
 		end
-		if col >= s - 1 and col <= e - 1 then
+		if s > 1 and line:sub(s - 1, s - 1) == "\\" then
+			pos = e + 1
+		elseif col >= s - 1 and col <= e - 1 then
 			return { key = line:sub(s + 1, e), start_col = s - 1, end_col = e - 1, style = "markdown" }
 		end
 		pos = e + 1

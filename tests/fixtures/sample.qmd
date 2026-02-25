@@ -1,0 +1,29 @@
+---
+title: "Quarto Test Doc"
+---
+
+```{r}
+#| label: fig-scatter
+#| fig-cap: "A scatter plot"
+
+plot(1:10)
+```
+
+```{r}
+#| label: tbl-summary
+#| tbl-cap: "A table"
+
+knitr::kable(head(mtcars))
+```
+
+```{r}
+# No label here — unnamed
+x <- 42
+```
+
+```{r}
+#| echo: false
+#| label: fig-hist
+
+hist(rnorm(100))
+```

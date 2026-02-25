@@ -1,0 +1,26 @@
+---
+title: "Test Document"
+---
+
+Some text here.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r myplot, fig.cap="A figure"}
+plot(1:10)
+```
+
+```{r mytable}
+knitr::kable(head(mtcars))
+```
+
+```{r}
+# unnamed chunk — no label
+x <- 1
+```
+
+```{r second-figure, fig.cap="Another figure"}
+hist(rnorm(100))
+```
