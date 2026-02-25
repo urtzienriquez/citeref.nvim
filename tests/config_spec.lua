@@ -15,7 +15,7 @@ describe("config", function()
   it("returns defaults when set() is called with no options", function()
     config.set({})
     local opts = config.get()
-    assert.is_nil(opts.backend)   -- nil by design; user must set it
+    assert.is_nil(opts.backend) -- nil by design; user must set it
     assert.is_table(opts.filetypes)
     assert.is_table(opts.keymaps)
     assert.is_table(opts.picker)
@@ -25,7 +25,7 @@ describe("config", function()
   it("merges user options over defaults", function()
     config.set({ backend = "fzf", default_latex_format = "citep" })
     local opts = config.get()
-    assert.equals("fzf",   opts.backend)
+    assert.equals("fzf", opts.backend)
     assert.equals("citep", opts.default_latex_format)
   end)
 
@@ -40,10 +40,10 @@ describe("config", function()
   it("preserves default keymaps when none are overridden", function()
     config.set({ backend = "fzf" })
     local km = config.get().keymaps
-    assert.equals("<C-a>m",     km.cite_markdown_i)
+    assert.equals("<C-a>m", km.cite_markdown_i)
     assert.equals("<leader>am", km.cite_markdown_n)
-    assert.equals("<C-a>f",     km.crossref_figure_i)
-    assert.equals("<C-a>t",     km.crossref_table_i)
+    assert.equals("<C-a>f", km.crossref_figure_i)
+    assert.equals("<C-a>t", km.crossref_table_i)
   end)
 
   it("allows individual keymaps to be disabled with false", function()
@@ -64,7 +64,9 @@ describe("config", function()
     local notified = false
     local orig_notify = vim.notify
     vim.notify = function(msg, level)
-      if msg:match("default_latex_format") then notified = true end
+      if msg:match("default_latex_format") then
+        notified = true
+      end
     end
 
     config.set({ backend = "fzf", default_latex_format = "bogus_format" })
@@ -75,8 +77,18 @@ describe("config", function()
   end)
 
   it("accepts all valid latex formats without resetting", function()
-    local valid = { "cite", "citep", "citet", "citeauthor", "citeyear", "citealt",
-                    "textcite", "parencite", "footcite", "autocite" }
+    local valid = {
+      "cite",
+      "citep",
+      "citet",
+      "citeauthor",
+      "citeyear",
+      "citealt",
+      "textcite",
+      "parencite",
+      "footcite",
+      "autocite",
+    }
     for _, fmt in ipairs(valid) do
       package.loaded["citeref.config"] = nil
       config = require("citeref.config")
@@ -89,7 +101,9 @@ describe("config", function()
     local notified = false
     local orig_notify = vim.notify
     vim.notify = function(msg, level)
-      if msg:match("backend") then notified = true end
+      if msg:match("backend") then
+        notified = true
+      end
     end
 
     config.set({ backend = "unknown_backend" })
@@ -102,6 +116,6 @@ describe("config", function()
     config.set({ backend = "fzf", picker = { layout = "horizontal" } })
     local p = config.get().picker
     assert.equals("horizontal", p.layout)
-    assert.equals("50%",        p.preview_size)  -- default survives
+    assert.equals("50%", p.preview_size) -- default survives
   end)
 end)

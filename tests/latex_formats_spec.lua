@@ -37,8 +37,18 @@ describe("latex_formats", function()
     for _, f in ipairs(formats) do
       cmds[f.cmd] = true
     end
-    local expected = { "cite", "citep", "citet", "citeauthor", "citeyear",
-                       "citealt", "textcite", "parencite", "footcite", "autocite" }
+    local expected = {
+      "cite",
+      "citep",
+      "citet",
+      "citeauthor",
+      "citeyear",
+      "citealt",
+      "textcite",
+      "parencite",
+      "footcite",
+      "autocite",
+    }
     for _, c in ipairs(expected) do
       assert.truthy(cmds[c], "missing command: " .. c)
     end

@@ -7,16 +7,16 @@
 
 ---@type CiterefLatexFormat[]
 local M = {
-  { cmd = "cite",       label = "\\cite{}"       },
-  { cmd = "citep",      label = "\\citep{}"      },
-  { cmd = "citet",      label = "\\citet{}"      },
+  { cmd = "cite", label = "\\cite{}" },
+  { cmd = "citep", label = "\\citep{}" },
+  { cmd = "citet", label = "\\citet{}" },
   { cmd = "citeauthor", label = "\\citeauthor{}" },
-  { cmd = "citeyear",   label = "\\citeyear{}"   },
-  { cmd = "citealt",    label = "\\citealt{}"    },
-  { cmd = "textcite",    label = "\\textcite{}"    },
-  { cmd = "parencite",    label = "\\parencite{}"    },
-  { cmd = "footcite",    label = "\\footcite{}"    },
-  { cmd = "autocite",    label = "\\autocite{}"    },
+  { cmd = "citeyear", label = "\\citeyear{}" },
+  { cmd = "citealt", label = "\\citealt{}" },
+  { cmd = "textcite", label = "\\textcite{}" },
+  { cmd = "parencite", label = "\\parencite{}" },
+  { cmd = "footcite", label = "\\footcite{}" },
+  { cmd = "autocite", label = "\\autocite{}" },
 }
 
 return M
