@@ -2,9 +2,9 @@ name: Tests
 
 on:
   push:
-    branches: ["**"]
+    branches: [main]
   pull_request:
-    branches: [main, master]
+    branches: [main]
 
 jobs:
   test:
@@ -36,7 +36,6 @@ jobs:
 
       - name: Run test suite
         run: |
-          nvim --headless \
-               -u tests/minimal_init.lua \
-               +"PlenaryBustedDirectory tests/ {sequential=true}" 2>&1 | tee /tmp/test-output.txt
-          grep -qE "^Failed\s*:\s*[^0]|^Errors\s*:\s*[^0]" /tmp/test-output.txt && exit 1 || exit 0
+          nvim --headless -u tests/minimal_init.lua \
+          -c "lua require('plenary.test_harness').test_directory('tests/', { incremental = false, sequential = true, halt_on_error = true })" \
+          -c "qa!"
