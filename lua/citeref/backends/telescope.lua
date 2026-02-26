@@ -96,6 +96,7 @@ local function chunk_previewer()
             pcall(vim.api.nvim_buf_call, bufnr, function()
               vim.cmd("norm! zz")
             end)
+            pcall(vim.api.nvim_buf_add_highlight, bufnr, 0, "TelescopePreviewLine", chunk.line - 1, 0, -1)
           end,
         })
       else
