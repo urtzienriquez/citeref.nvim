@@ -1,8 +1,8 @@
 --- plugin/citeref.lua
-if vim.g.loaded_citeref then
+if vim.g.loaded_citeref == 1 then
   return
 end
-vim.g.loaded_citeref = true
+vim.g.loaded_citeref = 1
 
 vim.schedule(function()
   local group = vim.api.nvim_create_augroup("citeref", { clear = true })
