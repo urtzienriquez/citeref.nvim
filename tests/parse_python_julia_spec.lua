@@ -19,9 +19,13 @@ describe("chunk parsing from qmd file (Python chunks)", function()
     local buf = vim.api.nvim_create_buf(false, true)
     local lines = vim.fn.readfile(path)
     vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
-    vim.bo[buf].filetype = "quarto"
     vim.api.nvim_buf_set_name(buf, path)
+
+    local save_ei = vim.o.eventignore
+    vim.o.eventignore = "all"
+    vim.bo[buf].filetype = "quarto"
     vim.api.nvim_set_current_buf(buf)
+    vim.o.eventignore = save_ei
 
     local all = parse.load_chunks()
     chunks = {}
@@ -96,9 +100,13 @@ describe("chunk parsing from qmd file (Julia chunks)", function()
     local buf = vim.api.nvim_create_buf(false, true)
     local lines = vim.fn.readfile(path)
     vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
-    vim.bo[buf].filetype = "quarto"
     vim.api.nvim_buf_set_name(buf, path)
+
+    local save_ei = vim.o.eventignore
+    vim.o.eventignore = "all"
+    vim.bo[buf].filetype = "quarto"
     vim.api.nvim_set_current_buf(buf)
+    vim.o.eventignore = save_ei
 
     local all = parse.load_chunks()
     chunks = {}
@@ -198,10 +206,13 @@ describe("chunk parsing from mixed-language qmd buffer", function()
       "x = 1",
       "```",
     })
-    vim.bo[buf].filetype = "quarto"
-    -- Give it a temporary name so load_chunks works without sibling scanning
     vim.api.nvim_buf_set_name(buf, "/tmp/citeref_mixed_test.qmd")
+
+    local save_ei = vim.o.eventignore
+    vim.o.eventignore = "all"
+    vim.bo[buf].filetype = "quarto"
     vim.api.nvim_set_current_buf(buf)
+    vim.o.eventignore = save_ei
 
     local all = parse.load_chunks()
     chunks = {}

@@ -287,20 +287,20 @@ describe("chunk parsing from rmd file", function()
   local chunks
 
   before_each(function()
-    -- Use a real buffer so we can test chunks_from_buf indirectly
-    -- by loading the fixture into a temp buffer.
     local path = FIXTURES .. "sample.rmd"
     local buf = vim.api.nvim_create_buf(false, true)
     local lines = vim.fn.readfile(path)
     vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
-    vim.bo[buf].filetype = "rmd"
     vim.api.nvim_buf_set_name(buf, path)
-    vim.api.nvim_set_current_buf(buf)
 
-    chunks = {}
-    -- load_chunks also scans siblings; to keep it isolated, call parse_bib analog manually.
-    -- We use load_chunks() and filter to is_current only.
+    local save_ei = vim.o.eventignore
+    vim.o.eventignore = "all"
+    vim.bo[buf].filetype = "rmd"
+    vim.api.nvim_set_current_buf(buf)
+    vim.o.eventignore = save_ei
+
     local all = require("citeref.parse").load_chunks()
+    chunks = {}
     for _, c in ipairs(all) do
       if c.is_current then
         chunks[#chunks + 1] = c
@@ -357,9 +357,13 @@ describe("chunk parsing from qmd file (YAML labels)", function()
     local buf = vim.api.nvim_create_buf(false, true)
     local lines = vim.fn.readfile(path)
     vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
-    vim.bo[buf].filetype = "quarto"
     vim.api.nvim_buf_set_name(buf, path)
+
+    local save_ei = vim.o.eventignore
+    vim.o.eventignore = "all"
+    vim.bo[buf].filetype = "quarto"
     vim.api.nvim_set_current_buf(buf)
+    vim.o.eventignore = save_ei
 
     local all = require("citeref.parse").load_chunks()
     chunks = {}
