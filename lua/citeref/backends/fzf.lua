@@ -190,6 +190,9 @@ function M.pick_citation(format, entries, ctx)
   end, {
     prompt = "> ",
     previewer = entry_previewer(entries),
+    fzf_opts = {
+      ["--multi"] = true, -- Add this line
+    },
     winopts = {
       title = current_title(),
       preview = {
