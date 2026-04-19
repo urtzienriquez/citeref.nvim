@@ -55,6 +55,21 @@ function M.cite_latex()
   end
 end
 
+function M.cite_myst()
+  if is_picker() then
+    local entries = parse.load_entries()
+    if #entries == 0 then
+      return
+    end
+    registry.call("pick_citation", "myst", entries, require("citeref.util").save_context())
+  else
+    vim.notify(
+      "citeref: myst cite requires a picker backend (fzf, telescope, snacks, or minipick).",
+      vim.log.levels.WARN
+    )
+  end
+end
+
 function M.cite_replace()
   if not is_picker() then
     vim.notify(
@@ -164,6 +179,12 @@ local function set_keymaps()
   end
   if km.cite_latex_n then
     map("n", km.cite_latex_n, M.cite_latex, "citeref: insert citation (LaTeX)")
+  end
+  if km.cite_myst_i then
+    map("i", km.cite_myst_i, M.cite_myst, "citeref: insert citation (MyST)")
+  end
+  if km.cite_myst_n then
+    map("n", km.cite_myst_n, M.cite_myst, "citeref: insert citation (MyST)")
   end
   if km.cite_replace_n then
     map("n", km.cite_replace_n, M.cite_replace, "citeref: replace citation under cursor")

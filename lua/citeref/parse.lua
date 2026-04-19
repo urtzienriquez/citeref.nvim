@@ -3,6 +3,30 @@
 
 local M = {}
 
+local function trim(s)
+  return (s:gsub("^%s+", ""):gsub("%s+$", ""))
+end
+
+local function parse_myst_body(body)
+  local prefix, suffix = "", ""
+
+  if body:sub(1, 1) == "{" then
+    local close = body:find("}", 2, true)
+    if close then
+      prefix = body:sub(2, close - 1)
+      body = body:sub(close + 1)
+    end
+  end
+
+  local core, maybe_suffix = body:match("^(.-)%{(.-)%}$")
+  if core and maybe_suffix then
+    body = core
+    suffix = maybe_suffix
+  end
+
+  return prefix, body, suffix
+end
+
 -- ─────────────────────────────────────────────────────────────
 -- Bib file resolution
 -- ─────────────────────────────────────────────────────────────
@@ -245,6 +269,56 @@ function M.citation_under_cursor()
       return { key = line:sub(s + 1, e), start_col = s - 1, end_col = e - 1, style = "markdown" }
     end
     pos = e + 1
+  end
+
+  -- MyST {cite:p}`key` / {cite:t}`key`
+  local mp = 1
+  while true do
+    local s, e, role, body = line:find("(%{cite:[pt]%})`([^`]*)`", mp)
+    if not s then
+      break
+    end
+    if col >= s - 1 and col <= e - 1 then
+      local prefix_raw, core, suffix_raw = parse_myst_body(body)
+      local prefix = trim(prefix_raw)
+      local suffix = trim(suffix_raw)
+      local all_keys = {}
+      local key_at_cursor = nil
+      local body_start = s + #role + 1
+      local core_start = body_start
+      if prefix_raw ~= "" then
+        core_start = core_start + #prefix_raw + 2
+      end
+
+      local kp = 1
+      while true do
+        local ks, ke = core:find("[^;%s]+", kp)
+        if not ks then
+          break
+        end
+        local key = core:sub(ks, ke)
+        all_keys[#all_keys + 1] = key
+        local abs_s = core_start + ks - 1
+        local abs_e = core_start + ke - 1
+        if col >= abs_s - 1 and col <= abs_e - 1 then
+          key_at_cursor = key
+        end
+        kp = ke + 1
+      end
+      if #all_keys > 0 then
+        return {
+          key = key_at_cursor or all_keys[1],
+          start_col = s - 1,
+          end_col = e - 1,
+          style = "myst",
+          cmd = role:sub(2, -2),
+          prefix = prefix,
+          suffix = suffix,
+          all_keys = all_keys,
+        }
+      end
+    end
+    mp = e + 1
   end
 
   -- LaTeX \cmd{...}

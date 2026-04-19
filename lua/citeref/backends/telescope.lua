@@ -1,6 +1,7 @@
 --- citeref.nvim – telescope backend
 local util = require("citeref.util")
 local parse = require("citeref.parse")
+local MYST_FORMATS = require("citeref.myst_formats")
 
 local M = {}
 
@@ -25,6 +26,10 @@ local function next_latex_format(current_cmd)
     end
   end
   return LATEX_FORMATS[1]
+end
+
+local function next_myst_format(current_cmd)
+  return MYST_FORMATS.next(current_cmd)
 end
 
 local function format_latex(keys, cmd)
@@ -110,7 +115,7 @@ end
 -- Citation picker
 -- ─────────────────────────────────────────────────────────────
 
----@param format "markdown"|"latex"
+---@param format "markdown"|"latex"|"myst"
 ---@param entries CiterefEntry[]
 ---@param ctx table
 function M.pick_citation(format, entries, ctx)
@@ -124,6 +129,7 @@ function M.pick_citation(format, entries, ctx)
 
   -- Mutable state for latex format cycling
   local default_cmd = (format == "latex") and cfg.default_latex_format or "cite"
+  local default_myst_cmd = (format == "myst") and cfg.default_myst_format or "cite:p"
   local latex_fmt = LATEX_FORMATS[1]
   for _, f in ipairs(LATEX_FORMATS) do
     if f.cmd == default_cmd then
@@ -131,13 +137,36 @@ function M.pick_citation(format, entries, ctx)
       break
     end
   end
+  local myst_fmt = MYST_FORMATS[1]
+  for _, f in ipairs(MYST_FORMATS) do
+    if f.cmd == default_myst_cmd then
+      myst_fmt = f
+      break
+    end
+  end
 
   local function current_title()
     if format == "latex" then
       return string.format(" Citations %s [<C-l> cycle] ", latex_fmt.label)
+    elseif format == "myst" then
+      return string.format(" Citations %s [<C-l> cycle] ", myst_fmt.label)
     else
       return " Citations @ "
     end
+  end
+
+  local function prompt_wrappers(done)
+    vim.ui.input({ prompt = "MyST prefix: " }, function(prefix)
+      if prefix == nil then
+        return
+      end
+      vim.ui.input({ prompt = "MyST suffix: " }, function(suffix)
+        if suffix == nil then
+          return
+        end
+        done(vim.trim(prefix), vim.trim(suffix))
+      end)
+    end)
   end
 
   pickers
@@ -186,6 +215,15 @@ function M.pick_citation(format, entries, ctx)
           local text
           if format == "latex" then
             text = format_latex(keys, latex_fmt.cmd)
+          elseif format == "myst" then
+            prompt_wrappers(function(prefix, suffix)
+              local wrapped = MYST_FORMATS.format(keys, myst_fmt.cmd, prefix, suffix)
+              util.insert_at_context(ctx, wrapped)
+              vim.defer_fn(function()
+                vim.notify("citeref: inserted " .. wrapped, vim.log.levels.INFO)
+              end, 100)
+            end)
+            return
           else
             text = parse.format_citation(keys)
           end
@@ -199,6 +237,15 @@ function M.pick_citation(format, entries, ctx)
         if format == "latex" then
           map({ "i", "n" }, "<C-l>", function()
             latex_fmt = next_latex_format(latex_fmt.cmd)
+            local picker = action_state.get_current_picker(prompt_bufnr)
+            local border = picker.prompt_border
+            if border and border.change_title then
+              border:change_title(current_title())
+            end
+          end)
+        elseif format == "myst" then
+          map({ "i", "n" }, "<C-l>", function()
+            myst_fmt = next_myst_format(myst_fmt.cmd)
             local picker = action_state.get_current_picker(prompt_bufnr)
             local border = picker.prompt_border
             if border and border.change_title then
@@ -232,7 +279,7 @@ function M.replace(entries, info)
 
   pickers
     .new({}, {
-      prompt_title = "Replace @" .. info.key,
+      prompt_title = info.style == "myst" and ("Replace MyST " .. info.key) or ("Replace @" .. info.key),
       layout_strategy = layout == "vertical" and "vertical" or "horizontal",
       layout_config = {
         vertical = { preview_height = parse_size(cfg.picker.preview_size), preview_cutoff = 0 },
@@ -262,7 +309,15 @@ function M.replace(entries, info)
             end, 100)
             return
           end
-          local replacement = info.style == "latex" and sel.value.key or ("@" .. sel.value.key)
+          local replacement
+          if info.style == "latex" then
+            replacement = sel.value.key
+          elseif info.style == "myst" then
+            local keys = MYST_FORMATS.replace_key(info.all_keys or { info.key }, info.key, sel.value.key)
+            replacement = MYST_FORMATS.format(keys, info.cmd or "cite:p", info.prefix, info.suffix)
+          else
+            replacement = "@" .. sel.value.key
+          end
           local ok, err =
             pcall(vim.api.nvim_buf_set_text, buf, row - 1, info.start_col, row - 1, info.end_col + 1, { replacement })
           vim.defer_fn(function()

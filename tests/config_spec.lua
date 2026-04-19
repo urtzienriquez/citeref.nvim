@@ -44,6 +44,8 @@ describe("config", function()
     assert.equals("<leader>am", km.cite_markdown_n)
     assert.equals("<C-a>f", km.crossref_figure_i)
     assert.equals("<C-a>t", km.crossref_table_i)
+    assert.equals("<C-a>s", km.cite_myst_i)
+    assert.equals("<leader>as", km.cite_myst_n)
   end)
 
   it("allows individual keymaps to be disabled with false", function()
@@ -94,6 +96,16 @@ describe("config", function()
       config = require("citeref.config")
       config.set({ backend = "fzf", default_latex_format = fmt })
       assert.equals(fmt, config.get().default_latex_format, "failed for format: " .. fmt)
+    end
+  end)
+
+  it("accepts valid myst formats without resetting", function()
+    local valid = { "cite:p", "cite:t" }
+    for _, fmt in ipairs(valid) do
+      package.loaded["citeref.config"] = nil
+      config = require("citeref.config")
+      config.set({ backend = "fzf", default_myst_format = fmt })
+      assert.equals(fmt, config.get().default_myst_format, "failed for format: " .. fmt)
     end
   end)
 

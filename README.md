@@ -150,6 +150,10 @@ require("citeref").setup({
   -- Valid values: "cite" | "citep" | "citet" | "citeauthor" | "citeyear" | "citealt"
   default_latex_format = "cite",
 
+  -- Default MyST citation role used when the MyST picker opens.
+  -- Press <C-l> inside the picker to cycle between {cite:p} and {cite:t}.
+  default_myst_format = "cite:p",
+
   keymaps = {
     -- Set to false to disable all default keymaps.
     enabled = true,
@@ -161,6 +165,8 @@ require("citeref").setup({
     cite_markdown_n   = "<leader>am",  -- insert @key              (normal mode)
     cite_latex_i      = "<C-a>l",      -- insert \cite{key}        (insert mode)
     cite_latex_n      = "<leader>al",  -- insert \cite{key}        (normal mode)
+    cite_myst_i       = "<C-a>s",      -- insert {cite:p}`key`     (insert mode)
+    cite_myst_n       = "<leader>as",  -- insert {cite:p}`key`     (normal mode)
     cite_replace_n    = "<leader>ar",  -- replace key under cursor (normal only)
     crossref_figure_i = "<C-a>f",      -- crossref figure          (insert mode)
     crossref_figure_n = "<leader>af",  -- crossref figure          (normal mode)
@@ -211,6 +217,8 @@ vim.api.nvim_create_autocmd("FileType", {
 | normal | `<leader>am`  | Insert citation `@key`         | picker backend |
 | insert | `<C-a>l`      | Insert citation `\cite{key}`   | any backend    |
 | normal | `<leader>al`  | Insert citation `\cite{key}`   | picker backend |
+| insert | `<C-a>s`      | Insert MyST citation            | picker backend |
+| normal | `<leader>as`  | Insert MyST citation            | picker backend |
 | normal | `<leader>ar`  | Replace citation under cursor  | picker backend |
 | insert | `<C-a>f`      | Insert figure crossref         | any backend    |
 | normal | `<leader>af`  | Insert figure crossref         | picker backend |

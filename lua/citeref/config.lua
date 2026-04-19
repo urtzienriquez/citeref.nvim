@@ -6,6 +6,7 @@
 ---@field keymaps CiterefKeymapConfig
 ---@field picker CiterefPickerConfig
 ---@field default_latex_format string  Default LaTeX cite command (e.g. "cite", "citep", "citet")
+---@field default_myst_format string   Default MyST cite role (e.g. "cite:p", "cite:t")
 
 ---@class CiterefKeymapConfig
 ---@field enabled           boolean
@@ -13,6 +14,8 @@
 ---@field cite_markdown_n   string|false
 ---@field cite_latex_i      string|false
 ---@field cite_latex_n      string|false
+---@field cite_myst_i       string|false
+---@field cite_myst_n       string|false
 ---@field cite_replace_n    string|false
 ---@field crossref_figure_i string|false
 ---@field crossref_figure_n string|false
@@ -57,12 +60,19 @@ M.defaults = {
   -- Valid values: "cite" | "citep" | "citet" | "citeauthor" | "citeyear" | "citealt"
   default_latex_format = "cite",
 
+  -- Default MyST citation role used when opening the MyST picker.
+  -- The picker always allows cycling through all formats with <C-l>.
+  -- Valid values: "cite:p" | "cite:t"
+  default_myst_format = "cite:p",
+
   keymaps = {
     enabled = true,
     cite_markdown_i = "<C-a>m",
     cite_markdown_n = "<leader>am",
     cite_latex_i = "<C-a>l",
     cite_latex_n = "<leader>al",
+    cite_myst_i = "<C-a>s",
+    cite_myst_n = "<leader>as",
     cite_replace_n = "<leader>ar",
     crossref_figure_i = "<C-a>f",
     crossref_figure_n = "<leader>af",
@@ -99,6 +109,11 @@ local VALID_LATEX_FORMATS = {
   autocite = true,
 }
 
+local VALID_MYST_FORMATS = {
+  ["cite:p"] = true,
+  ["cite:t"] = true,
+}
+
 ---@param opts? table
 function M.set(opts)
   M.options = vim.tbl_deep_extend("force", M.defaults, opts or {})
@@ -129,6 +144,17 @@ function M.set(opts)
       vim.log.levels.WARN
     )
     M.options.default_latex_format = "cite"
+  end
+
+  if M.options.default_myst_format and not VALID_MYST_FORMATS[M.options.default_myst_format] then
+    vim.notify(
+      "citeref: unknown default_myst_format '"
+        .. tostring(M.options.default_myst_format)
+        .. "'.\n"
+        .. "  Valid values: 'cite:p' | 'cite:t'.",
+      vim.log.levels.WARN
+    )
+    M.options.default_myst_format = "cite:p"
   end
 end
 
