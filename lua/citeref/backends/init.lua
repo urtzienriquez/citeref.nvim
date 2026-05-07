@@ -5,7 +5,7 @@
 ---
 --- A backend is a table with any combination of these functions:
 ---
----   pick_citation(format, entries, ctx)   "markdown"|"latex"|"myst", CiterefEntry[], ctx
+---   pick_citation(format, entries, ctx, latex_cmd?)   "markdown"|"latex"|"myst", CiterefEntry[], ctx, string|nil
 ---   pick_crossref(ref_type, chunks, ctx)  "fig"|"tab", CiterefChunk[], ctx
 ---   replace(entries, info)                CiterefEntry[], cursor-info table
 ---   -- completion backends only:

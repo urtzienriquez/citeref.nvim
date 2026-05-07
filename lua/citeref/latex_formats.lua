@@ -17,6 +17,7 @@ local M = {
   { cmd = "parencite", label = "\\parencite{}" },
   { cmd = "footcite", label = "\\footcite{}" },
   { cmd = "autocite", label = "\\autocite{}" },
+  { cmd = "nocite", label = "\\nocite{}" },
 }
 
 return M

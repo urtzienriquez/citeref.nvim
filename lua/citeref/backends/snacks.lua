@@ -106,12 +106,12 @@ end
 ---@param format "markdown"|"latex"|"myst"
 ---@param entries CiterefEntry[]
 ---@param ctx table
-function M.pick_citation(format, entries, ctx)
+function M.pick_citation(format, entries, ctx, latex_cmd)
   local Snacks = require("snacks")
 
   -- Mutable state for latex format cycling
   local cfg = require("citeref.config").get()
-  local default_cmd = (format == "latex") and cfg.default_latex_format or "cite"
+  local default_cmd = (format == "latex") and (latex_cmd or cfg.default_latex_format) or "cite"
   local default_myst_cmd = (format == "myst") and cfg.default_myst_format or "cite:p"
   local latex_fmt = LATEX_FORMATS[1]
   for _, f in ipairs(LATEX_FORMATS) do

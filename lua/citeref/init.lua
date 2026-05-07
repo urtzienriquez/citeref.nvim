@@ -44,7 +44,35 @@ function M.cite_latex()
     if #entries == 0 then
       return
     end
-    registry.call("pick_citation", "latex", entries, require("citeref.util").save_context())
+
+    local cfg = require("citeref.config").get()
+    local LATEX_FORMATS = require("citeref.latex_formats")
+
+    local default_label = "\\cite{}"
+    for _, f in ipairs(LATEX_FORMATS) do
+      if f.cmd == cfg.default_latex_format then
+        default_label = f.label
+        break
+      end
+    end
+
+    local options = {}
+    options[#options + 1] = { cmd = nil, label = "default (" .. default_label .. ")" }
+    for _, f in ipairs(LATEX_FORMATS) do
+      options[#options + 1] = { cmd = f.cmd, label = f.label }
+    end
+
+    vim.ui.select(options, {
+      prompt = "LaTeX format: ",
+      format_item = function(item)
+        return item.label
+      end,
+    }, function(choice)
+      if not choice then
+        return
+      end
+      registry.call("pick_citation", "latex", entries, require("citeref.util").save_context(), choice.cmd)
+    end)
   elseif insert_mode() then
     registry.call("show", "citation", "latex")
   else
@@ -139,7 +167,7 @@ end
 
 --- Register a third-party or user-defined backend.
 --- The backend table should implement any of:
----   pick_citation(format, entries, ctx)
+---   pick_citation(format, entries, ctx, latex_cmd?)
 ---   pick_crossref(ref_type, chunks, ctx)
 ---   replace(entries, info)
 ---   register()        -- completion backends: register source with engine
