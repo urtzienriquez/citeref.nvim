@@ -118,7 +118,7 @@ end
 ---@param format "markdown"|"latex"|"myst"
 ---@param entries CiterefEntry[]
 ---@param ctx table
-function M.pick_citation(format, entries, ctx)
+function M.pick_citation(format, entries, ctx, cmd)
   local pickers = require("telescope.pickers")
   local finders = require("telescope.finders")
   local sorters = require("telescope.sorters")
@@ -128,8 +128,8 @@ function M.pick_citation(format, entries, ctx)
   local layout = cfg.picker.layout or "vertical"
 
   -- Mutable state for latex format cycling
-  local default_cmd = (format == "latex") and cfg.default_latex_format or "cite"
-  local default_myst_cmd = (format == "myst") and cfg.default_myst_format or "cite:p"
+  local default_cmd = (format == "latex") and (cmd or cfg.default_latex_format) or "cite"
+  local default_myst_cmd = (format == "myst") and (cmd or cfg.default_myst_format) or "cite:p"
   local latex_fmt = LATEX_FORMATS[1]
   for _, f in ipairs(LATEX_FORMATS) do
     if f.cmd == default_cmd then
