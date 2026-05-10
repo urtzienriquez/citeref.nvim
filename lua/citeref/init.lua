@@ -68,10 +68,8 @@ function M.cite_latex()
         return item.label
       end,
     }, function(choice)
-      if not choice then
-        return
-      end
-      registry.call("pick_citation", "latex", entries, require("citeref.util").save_context(), choice.cmd)
+      local cmd = choice and choice.cmd or nil
+      registry.call("pick_citation", "latex", entries, require("citeref.util").save_context(), cmd)
     end)
   elseif insert_mode() then
     registry.call("show", "citation", "latex")
@@ -113,10 +111,8 @@ function M.cite_myst()
         return item.label
       end,
     }, function(choice)
-      if not choice then
-        return
-      end
-      registry.call("pick_citation", "myst", entries, require("citeref.util").save_context(), choice.cmd)
+      local cmd = choice and choice.cmd or nil
+      registry.call("pick_citation", "myst", entries, require("citeref.util").save_context(), cmd)
     end)
   else
     vim.notify(

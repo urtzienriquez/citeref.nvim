@@ -146,13 +146,15 @@ require("citeref").setup({
   --   fun():string[] → function called each time a picker opens (dynamic)
   bib_files = { "/path/to/your/library.bib" },
 
-  -- Default LaTeX citation command used when the LaTeX picker opens.
-  -- Press <C-l> inside the picker to cycle through all available formats.
+  -- Default LaTeX citation command used when "default" is selected from the
+  -- format prompt. A vim.ui.select dialog opens first to let you pick a
+  -- format; press <C-l> inside the picker to cycle through all formats.
   -- Valid values: "cite" | "citep" | "citet" | "citeauthor" | "citeyear" | "citealt"
   default_latex_format = "cite",
 
-  -- Default MyST citation role used when the MyST picker opens.
-  -- Press <C-l> inside the picker to cycle between {cite:p} and {cite:t}.
+  -- Default MyST citation role used when "default" is selected from the
+  -- format prompt. A vim.ui.select dialog opens first to let you pick a
+  -- format; press <C-l> inside the picker to cycle between {cite:p} and {cite:t}.
   default_myst_format = "cite:p",
 
   keymaps = {
@@ -164,10 +166,10 @@ require("citeref").setup({
     -- Normal-mode keymaps require a picker backend; they warn otherwise.
     cite_markdown_i   = "<C-a>m",      -- insert @key              (insert mode)
     cite_markdown_n   = "<leader>am",  -- insert @key              (normal mode)
-    cite_latex_i      = "<C-a>l",      -- insert \cite{key}        (insert mode)
-    cite_latex_n      = "<leader>al",  -- insert \cite{key}        (normal mode)
-    cite_myst_i       = "<C-a>s",      -- insert {cite:p}`key`     (insert mode)
-    cite_myst_n       = "<leader>as",  -- insert {cite:p}`key`     (normal mode)
+    cite_latex_i      = "<C-a>l",      -- insert LaTeX citation — format prompt first (insert mode)
+    cite_latex_n      = "<leader>al",  -- insert LaTeX citation — format prompt first (normal mode)
+    cite_myst_i       = "<C-a>s",      -- insert MyST citation — format prompt first  (insert mode)
+    cite_myst_n       = "<leader>as",  -- insert MyST citation — format prompt first  (normal mode)
     cite_replace_n    = "<leader>ar",  -- replace key under cursor (normal only)
     crossref_figure_i = "<C-a>f",      -- crossref figure          (insert mode)
     crossref_figure_n = "<leader>af",  -- crossref figure          (normal mode)
@@ -216,8 +218,8 @@ vim.api.nvim_create_autocmd("FileType", {
 | ------ | ------------ | ----------------------------- | -------------- |
 | insert | `<C-a>m`     | Insert citation `@key`        | any backend    |
 | normal | `<leader>am` | Insert citation `@key`        | picker backend |
-| insert | `<C-a>l`     | Insert citation `\cite{key}`  | any backend    |
-| normal | `<leader>al` | Insert citation `\cite{key}`  | picker backend |
+| insert | `<C-a>l`     | Insert LaTeX citation         | any backend    |
+| normal | `<leader>al` | Insert LaTeX citation         | picker backend |
 | insert | `<C-a>s`     | Insert MyST citation          | picker backend |
 | normal | `<leader>as` | Insert MyST citation          | picker backend |
 | normal | `<leader>ar` | Replace citation under cursor | picker backend |
@@ -232,9 +234,24 @@ Normal-mode keymaps with a completion backend show a warning — there is no pic
 
 ---
 
-## LaTeX citation formats
+## Citation format selection
 
-When using a picker backend, the LaTeX citation picker (`<C-a>l` / `<leader>al`) opens with your `default_latex_format` active (defaults to `\cite{}`). Press **`<C-l>`** inside the picker to cycle through all available formats:
+When using a picker backend, both the LaTeX and MyST citation pickers first show a `vim.ui.select` dialog to choose the citation format. This lets you quickly pick a specific format without cycling through the list.
+
+The first option is always **default** — selecting it (or pressing `<Esc>`) opens the picker with your configured default format:
+
+| Citation type | Config option          | Default    |
+| ------------- | ---------------------- | ---------- |
+| LaTeX         | `default_latex_format` | `\cite{}`  |
+| MyST          | `default_myst_format`  | `{cite:p}` |
+
+Selecting any other format opens the picker with that format active.
+
+### Format cycling inside the picker
+
+Once the picker is open, press **`<C-l>`** to cycle through all available formats. The current format is shown in the picker title; a notification confirms each cycle.
+
+#### LaTeX formats
 
 | Command         | Output             |
 | --------------- | ------------------ |
@@ -248,19 +265,26 @@ When using a picker backend, the LaTeX citation picker (`<C-a>l` / `<leader>al`)
 | `\parencite{}`  | `\parencite{key}`  |
 | `\footcite{}`   | `\footcite{key}`   |
 | `\autocite{}`   | `\autocite{key}`   |
+| `\nocite{}`     | `\nocite{key}`     |
 
-The current format is shown in the picker title. A notification confirms each cycle.
+#### MyST formats
 
-To always open on a specific format:
+| Command    | Output          |
+| ---------- | --------------- |
+| `{cite:p}` | `{cite:p}`key`` |
+| `{cite:t}` | `{cite:t}`key`` |
+
+### Setting the default format
 
 ```lua
 require("citeref").setup({
   backend              = "fzf",
   default_latex_format = "citep",
+  default_myst_format  = "cite:t",
 })
 ```
 
-Completion backends (`blink`, `cmp`) trigger on `@` for markdown and `\cite{` for LaTeX. They do not support format cycling — the format is determined by what you type.
+Completion backends (`blink`, `cmp`) trigger on `@` for markdown and `\cite{` for LaTeX. They do not support format selection or cycling — the format is determined by what you type.
 
 ---
 
@@ -399,10 +423,11 @@ citeref uses a backend registry. You can register any table as a backend — fro
 ```lua
 require("citeref").register_backend("my_picker", {
   -- Called for citation insertion (picker backends)
-  pick_citation = function(format, entries, ctx)
-    -- format:  "markdown" | "latex"
+  pick_citation = function(format, entries, ctx, cmd)
+    -- format:  "markdown" | "latex" | "myst"
     -- entries: CiterefEntry[]  (key, title, author, year, journaltitle, abstract)
     -- ctx:     saved cursor context from util.save_context()
+    -- cmd:     optional — initial format command for latex/myst, or nil for default
   end,
 
   -- Called for crossref insertion (picker backends)
