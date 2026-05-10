@@ -174,21 +174,27 @@ end)
 -- ─────────────────────────────────────────────────────────────
 
 describe("format_crossref", function()
-  local qmd_buf, rmd_buf, md_buf
+  local qmd_buf, rmd_buf, md_buf, tex_buf, latex_buf
 
   before_each(function()
     qmd_buf = vim.api.nvim_create_buf(false, true)
     rmd_buf = vim.api.nvim_create_buf(false, true)
     md_buf = vim.api.nvim_create_buf(false, true)
+    tex_buf = vim.api.nvim_create_buf(false, true)
+    latex_buf = vim.api.nvim_create_buf(false, true)
     vim.bo[qmd_buf].filetype = "quarto"
     vim.bo[rmd_buf].filetype = "rmd"
     vim.bo[md_buf].filetype = "markdown"
+    vim.bo[tex_buf].filetype = "tex"
+    vim.bo[latex_buf].filetype = "latex"
   end)
 
   after_each(function()
     vim.api.nvim_buf_delete(qmd_buf, { force = true })
     vim.api.nvim_buf_delete(rmd_buf, { force = true })
     vim.api.nvim_buf_delete(md_buf, { force = true })
+    vim.api.nvim_buf_delete(tex_buf, { force = true })
+    vim.api.nvim_buf_delete(latex_buf, { force = true })
   end)
 
   it("returns @label for quarto buffers (fig)", function()
@@ -197,6 +203,14 @@ describe("format_crossref", function()
 
   it("returns @label for quarto buffers (tab)", function()
     assert.equals("@mytab", parse.format_crossref("tab", "mytab", qmd_buf))
+  end)
+
+  it("returns \\ref{label} for tex buffers", function()
+    assert.equals("\\ref{myfig}", parse.format_crossref("fig", "myfig", tex_buf))
+  end)
+
+  it("returns \\ref{label} for latex buffers", function()
+    assert.equals("\\ref{mytab}", parse.format_crossref("tab", "mytab", latex_buf))
   end)
 
   it("returns \\@ref(fig:label) for rmd buffers", function()
@@ -209,6 +223,18 @@ describe("format_crossref", function()
 
   it("returns \\@ref() syntax for plain markdown buffers", function()
     assert.equals("\\@ref(fig:myfig)", parse.format_crossref("fig", "myfig", md_buf))
+  end)
+
+  it("preserves existing type prefix in \\@ref for rmd buffers", function()
+    assert.equals("\\@ref(fig:myfig)", parse.format_crossref("fig", "fig:myfig", rmd_buf))
+  end)
+
+  it("uses bare \\@ref(label) for rmd when source is 'latex' (no prefix)", function()
+    assert.equals("\\@ref(myfig)", parse.format_crossref("fig", "myfig", rmd_buf, "latex"))
+  end)
+
+  it("uses \\@ref(fig:label) for rmd when source is 'latex' with existing prefix", function()
+    assert.equals("\\@ref(fig:myfig)", parse.format_crossref("fig", "fig:myfig", rmd_buf, "latex"))
   end)
 end)
 
@@ -434,5 +460,259 @@ describe("chunk parsing from qmd file (YAML labels)", function()
       return c.label == ""
     end, chunks)
     assert.equals(1, #unnamed)
+  end)
+end)
+
+-- ─────────────────────────────────────────────────────────────
+-- load_labels (LaTeX labels)
+-- ─────────────────────────────────────────────────────────────
+
+describe("load_labels with tex/latex buffers", function()
+  local tmpdir
+
+  before_each(function()
+    -- Create a temp directory so sibling file scanning doesn't pick up fixtures
+    tmpdir = vim.fn.tempname()
+    os.execute("mkdir -p " .. tmpdir)
+  end)
+
+  after_each(function()
+    os.execute("rm -rf " .. tmpdir)
+  end)
+
+  it("finds labels inside figure environments", function()
+    local buf = vim.api.nvim_create_buf(false, true)
+    local path = tmpdir .. "/test.tex"
+    vim.api.nvim_buf_set_name(buf, path)
+    vim.bo[buf].filetype = "tex"
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, {
+      "\\begin{figure}",
+      "\\label{myfig}",
+      "\\end{figure}",
+    })
+    local save_ei = vim.o.eventignore
+    vim.o.eventignore = "all"
+    vim.api.nvim_set_current_buf(buf)
+    vim.o.eventignore = save_ei
+
+    local labels = parse.load_labels("fig")
+    assert.equals(1, #labels)
+    assert.equals("myfig", labels[1].label)
+    assert.matches("test%.tex", labels[1].file)
+  end)
+
+  it("finds labels inside table environments", function()
+    local buf = vim.api.nvim_create_buf(false, true)
+    local path = tmpdir .. "/test.tex"
+    vim.api.nvim_buf_set_name(buf, path)
+    vim.bo[buf].filetype = "tex"
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, {
+      "\\begin{table}",
+      "\\label{mytab}",
+      "\\end{table}",
+    })
+    local save_ei = vim.o.eventignore
+    vim.o.eventignore = "all"
+    vim.api.nvim_set_current_buf(buf)
+    vim.o.eventignore = save_ei
+
+    local labels = parse.load_labels("tab")
+    assert.equals(1, #labels)
+    assert.equals("mytab", labels[1].label)
+  end)
+
+  it("finds labels inside starred environments (figure*)", function()
+    local buf = vim.api.nvim_create_buf(false, true)
+    local path = tmpdir .. "/test.tex"
+    vim.api.nvim_buf_set_name(buf, path)
+    vim.bo[buf].filetype = "tex"
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, {
+      "\\begin{figure*}",
+      "\\label{widefig}",
+      "\\end{figure*}",
+    })
+    local save_ei = vim.o.eventignore
+    vim.o.eventignore = "all"
+    vim.api.nvim_set_current_buf(buf)
+    vim.o.eventignore = save_ei
+
+    local labels = parse.load_labels("fig")
+    assert.equals(1, #labels)
+    assert.equals("widefig", labels[1].label)
+  end)
+
+  it("finds labels inside starred environments (table*)", function()
+    local buf = vim.api.nvim_create_buf(false, true)
+    local path = tmpdir .. "/test.tex"
+    vim.api.nvim_buf_set_name(buf, path)
+    vim.bo[buf].filetype = "latex"
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, {
+      "\\begin{table*}",
+      "\\label{widetab}",
+      "\\end{table*}",
+    })
+    local save_ei = vim.o.eventignore
+    vim.o.eventignore = "all"
+    vim.api.nvim_set_current_buf(buf)
+    vim.o.eventignore = save_ei
+
+    local labels = parse.load_labels("tab")
+    assert.equals(1, #labels)
+    assert.equals("widetab", labels[1].label)
+  end)
+
+  it("skips labels outside figure/table environments", function()
+    local buf = vim.api.nvim_create_buf(false, true)
+    local path = tmpdir .. "/test.tex"
+    vim.api.nvim_buf_set_name(buf, path)
+    vim.bo[buf].filetype = "tex"
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, {
+      "\\label{section-intro}",
+      "\\begin{figure}",
+      "\\label{myfig}",
+      "\\end{figure}",
+      "\\label{another-section}",
+    })
+    local save_ei = vim.o.eventignore
+    vim.o.eventignore = "all"
+    vim.api.nvim_set_current_buf(buf)
+    vim.o.eventignore = save_ei
+
+    local labels = parse.load_labels("fig")
+    assert.equals(1, #labels)
+    assert.equals("myfig", labels[1].label)
+  end)
+
+  it("preserves fig: prefix from labels inside figure environments", function()
+    local buf = vim.api.nvim_create_buf(false, true)
+    local path = tmpdir .. "/test.tex"
+    vim.api.nvim_buf_set_name(buf, path)
+    vim.bo[buf].filetype = "tex"
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, {
+      "\\begin{figure}",
+      "\\label{fig:prefixed}",
+      "\\end{figure}",
+    })
+    local save_ei = vim.o.eventignore
+    vim.o.eventignore = "all"
+    vim.api.nvim_set_current_buf(buf)
+    vim.o.eventignore = save_ei
+
+    local labels = parse.load_labels("fig")
+    assert.equals(1, #labels)
+    assert.equals("fig:prefixed", labels[1].label)
+  end)
+
+  it("preserves tab: prefix from labels inside table environments", function()
+    local buf = vim.api.nvim_create_buf(false, true)
+    local path = tmpdir .. "/test.tex"
+    vim.api.nvim_buf_set_name(buf, path)
+    vim.bo[buf].filetype = "tex"
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, {
+      "\\begin{table}",
+      "\\label{tab:prefixed}",
+      "\\end{table}",
+    })
+    local save_ei = vim.o.eventignore
+    vim.o.eventignore = "all"
+    vim.api.nvim_set_current_buf(buf)
+    vim.o.eventignore = save_ei
+
+    local labels = parse.load_labels("tab")
+    assert.equals(1, #labels)
+    assert.equals("tab:prefixed", labels[1].label)
+  end)
+
+  it("respects type filter: fig labels do not appear in tab picker", function()
+    local buf = vim.api.nvim_create_buf(false, true)
+    local path = tmpdir .. "/test.tex"
+    vim.api.nvim_buf_set_name(buf, path)
+    vim.bo[buf].filetype = "tex"
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, {
+      "\\begin{figure}",
+      "\\label{myfig}",
+      "\\end{figure}",
+      "\\begin{table}",
+      "\\label{mytab}",
+      "\\end{table}",
+    })
+    local save_ei = vim.o.eventignore
+    vim.o.eventignore = "all"
+    vim.api.nvim_set_current_buf(buf)
+    vim.o.eventignore = save_ei
+
+    local fig_labels = parse.load_labels("fig")
+    assert.equals(1, #fig_labels)
+    assert.equals("myfig", fig_labels[1].label)
+
+    local tab_labels = parse.load_labels("tab")
+    assert.equals(1, #tab_labels)
+    assert.equals("mytab", tab_labels[1].label)
+  end)
+
+  it("finds labels inside nested environments", function()
+    local buf = vim.api.nvim_create_buf(false, true)
+    local path = tmpdir .. "/test.tex"
+    vim.api.nvim_buf_set_name(buf, path)
+    vim.bo[buf].filetype = "tex"
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, {
+      "\\begin{figure}",
+      "  \\begin{center}",
+      "    \\includegraphics{img.png}",
+      "    \\label{nestedfig}",
+      "  \\end{center}",
+      "\\end{figure}",
+    })
+    local save_ei = vim.o.eventignore
+    vim.o.eventignore = "all"
+    vim.api.nvim_set_current_buf(buf)
+    vim.o.eventignore = save_ei
+
+    local labels = parse.load_labels("fig")
+    assert.equals(1, #labels)
+    assert.equals("nestedfig", labels[1].label)
+  end)
+
+  it("skips commented lines with \\begin{figure}", function()
+    local buf = vim.api.nvim_create_buf(false, true)
+    local path = tmpdir .. "/test.tex"
+    vim.api.nvim_buf_set_name(buf, path)
+    vim.bo[buf].filetype = "tex"
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, {
+      "% \\begin{figure}",
+      "% \\label{commented}",
+      "% \\end{figure}",
+      "\\begin{figure}",
+      "\\label{real}",
+      "\\end{figure}",
+    })
+    local save_ei = vim.o.eventignore
+    vim.o.eventignore = "all"
+    vim.api.nvim_set_current_buf(buf)
+    vim.o.eventignore = save_ei
+
+    local labels = parse.load_labels("fig")
+    assert.equals(1, #labels)
+    assert.equals("real", labels[1].label)
+  end)
+
+  it("handles \\label inside \\caption", function()
+    local buf = vim.api.nvim_create_buf(false, true)
+    local path = tmpdir .. "/test.tex"
+    vim.api.nvim_buf_set_name(buf, path)
+    vim.bo[buf].filetype = "tex"
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, {
+      "\\begin{figure}",
+      "\\caption{My figure\\label{figincap}}",
+      "\\end{figure}",
+    })
+    local save_ei = vim.o.eventignore
+    vim.o.eventignore = "all"
+    vim.api.nvim_set_current_buf(buf)
+    vim.o.eventignore = save_ei
+
+    local labels = parse.load_labels("fig")
+    assert.equals(1, #labels)
+    assert.equals("figincap", labels[1].label)
   end)
 end)

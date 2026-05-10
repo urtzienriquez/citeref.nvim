@@ -344,7 +344,7 @@ function M.pick_crossref(ref_type, chunks, ctx)
           vim.notify("citeref: chunk has no label – add a label to use it in a cross-reference", vim.log.levels.WARN)
           return
         end
-        local crossref = parse.format_crossref(ref_type, chunk.label, ctx.bufnr)
+        local crossref = parse.format_crossref(ref_type, chunk.label, ctx.bufnr, chunk.source)
         util.insert_at_context(ctx, crossref)
         vim.notify("citeref: inserted " .. crossref, vim.log.levels.INFO)
       end)

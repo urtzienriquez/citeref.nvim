@@ -382,7 +382,7 @@ function M.pick_crossref(ref_type, chunks, ctx)
             end, 100)
             return
           end
-          local crossref = parse.format_crossref(ref_type, chunk.label, ctx.bufnr)
+          local crossref = parse.format_crossref(ref_type, chunk.label, ctx.bufnr, chunk.source)
           util.insert_at_context(ctx, crossref)
           vim.defer_fn(function()
             vim.notify("citeref: inserted " .. crossref, vim.log.levels.INFO)

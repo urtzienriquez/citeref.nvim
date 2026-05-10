@@ -144,16 +144,16 @@ end
 
 function M.crossref_figure()
   if is_picker() then
-    local chunks = parse.load_chunks()
-    if #chunks == 0 then
-      vim.notify("citeref: no code chunks found.", vim.log.levels.WARN)
+    local labels = parse.load_labels("fig")
+    if #labels == 0 then
+      vim.notify("citeref: no figure labels found.", vim.log.levels.WARN)
       return
     end
     -- Capture filetype now (before picker opens and focus changes)
     local bufnr = vim.api.nvim_get_current_buf()
     local ctx = require("citeref.util").save_context()
     ctx.bufnr = bufnr
-    registry.call("pick_crossref", "fig", chunks, ctx)
+    registry.call("pick_crossref", "fig", labels, ctx)
   elseif insert_mode() then
     registry.call("show", "crossref_fig")
   else
@@ -166,15 +166,15 @@ end
 
 function M.crossref_table()
   if is_picker() then
-    local chunks = parse.load_chunks()
-    if #chunks == 0 then
-      vim.notify("citeref: no code chunks found.", vim.log.levels.WARN)
+    local labels = parse.load_labels("tab")
+    if #labels == 0 then
+      vim.notify("citeref: no table labels found.", vim.log.levels.WARN)
       return
     end
     local bufnr = vim.api.nvim_get_current_buf()
     local ctx = require("citeref.util").save_context()
     ctx.bufnr = bufnr
-    registry.call("pick_crossref", "tab", chunks, ctx)
+    registry.call("pick_crossref", "tab", labels, ctx)
   elseif insert_mode() then
     registry.call("show", "crossref_tab")
   else

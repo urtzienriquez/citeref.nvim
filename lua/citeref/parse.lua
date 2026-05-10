@@ -234,15 +234,27 @@ end
 -- ─────────────────────────────────────────────────────────────
 
 --- Return the correct crossref insertion string for the current buffer's filetype.
---- Quarto uses native @label syntax; R Markdown uses \@ref(fig:label) / \@ref(tab:label).
+--- Quarto uses native @label syntax; R Markdown uses \@ref(fig:label) / \@ref(tab:label);
+--- LaTeX uses \ref{label} (label is echoed as-is, no prefix added).
 ---@param ref_type "fig"|"tab"
 ---@param label string
 ---@param bufnr? integer  defaults to current buffer
+---@param source? string  "latex" for LaTeX \label sources (no ref_type prefix added in rmd)
 ---@return string
-function M.format_crossref(ref_type, label, bufnr)
+function M.format_crossref(ref_type, label, bufnr, source)
   local ft = vim.bo[bufnr or vim.api.nvim_get_current_buf()].filetype
   if ft == "quarto" then
     return "@" .. label
+  end
+  if ft == "tex" or ft == "latex" then
+    return string.format("\\ref{%s}", label)
+  end
+  if source == "latex" then
+    return string.format("\\@ref(%s)", label)
+  end
+  -- R Markdown / markdown: if label already has a type prefix (e.g. fig:), use it directly
+  if label:match("^[a-z]+:") then
+    return string.format("\\@ref(%s)", label)
   end
   return string.format("\\@ref(%s:%s)", ref_type, label)
 end
@@ -532,6 +544,161 @@ function M.load_chunks()
       vim.list_extend(result, chunks_from_file(f))
     end
   end
+  return result
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- LaTeX label parser
+-- ─────────────────────────────────────────────────────────────
+
+--- Map of LaTeX environments to crossref types.
+local ENV_TYPE_MAP = {
+  figure = "fig",
+  ["figure*"] = "fig",
+  table = "tab",
+  ["table*"] = "tab",
+}
+
+--- Scan a list of lines for \label{...} inside figure/table environments.
+--- Labels that are not inside a recognised environment are skipped.
+--- The label is stored as-is (any fig:/tab: prefix is preserved).
+---@param lines string[]
+---@param filepath string
+---@param is_current boolean
+---@param type_filter? "fig"|"tab"  if set, only return labels of this type
+---@return CiterefChunk[]
+local function labels_from_lines(lines, filepath, is_current, type_filter)
+  local labels = {}
+  local fname = filepath ~= "" and vim.fn.fnamemodify(filepath, ":t") or "[No Name]"
+
+  local env_stack = {}
+
+  for i, line in ipairs(lines) do
+    -- Strip full-line comments (lines starting with % after optional whitespace)
+    if line:match("^%s*%%") then
+      goto continue
+    end
+
+    -- Process \begin{env} and \end{env} in text order on this line
+    local pos = 1
+    while pos <= #line do
+      local bs = line:find("\\begin{", pos)
+      local es = line:find("\\end{", pos)
+      if not bs and not es then
+        break
+      end
+      if bs and (not es or bs < es) then
+        local _, be, env = line:find("\\begin{(%*?%a+%*?)}", bs)
+        if env then
+          env_stack[#env_stack + 1] = env
+          pos = be + 1
+        else
+          pos = bs + 1
+        end
+      else
+        local _, ee, env = line:find("\\end{(%*?%a+%*?)}", es)
+        if env then
+          for j = #env_stack, 1, -1 do
+            if env_stack[j] == env then
+              table.remove(env_stack, j)
+              break
+            end
+          end
+          pos = ee + 1
+        else
+          pos = es + 1
+        end
+      end
+    end
+
+    -- Determine current type from environment stack (innermost match)
+    local cur_type = nil
+    for j = #env_stack, 1, -1 do
+      local t = ENV_TYPE_MAP[env_stack[j]]
+      if t then
+        cur_type = t
+        break
+      end
+    end
+
+    -- Find \label{...} on this line
+    for raw_label in line:gmatch("\\label{([^}]+)}") do
+      if cur_type and (type_filter == nil or cur_type == type_filter) then
+        labels[#labels + 1] = {
+          label = raw_label,
+          display = string.format("%s  line %d  (%s)", raw_label, i, fname),
+          line = i,
+          file = filepath,
+          is_current = is_current,
+          header = line,
+          source = "latex",
+        }
+      end
+    end
+
+    ::continue::
+  end
+
+  return labels
+end
+
+---@param filepath string
+---@param type_filter? "fig"|"tab"
+---@return CiterefChunk[]
+local function labels_from_file(filepath, type_filter)
+  local file = io.open(filepath, "r")
+  if not file then
+    return {}
+  end
+  local all_lines = {}
+  for l in file:lines() do
+    all_lines[#all_lines + 1] = l
+  end
+  file:close()
+  return labels_from_lines(all_lines, filepath, false, type_filter)
+end
+
+--- Return all cross-reference targets (code chunks + LaTeX labels) for the
+--- current buffer and sibling files, optionally filtered by type.
+--- For tex/latex buffers only LaTeX labels are scanned; for other filetypes
+--- code chunks are included as well (existing behaviour).
+---@param ref_type? "fig"|"tab"  if set, only return labels of this type
+---@return CiterefChunk[]
+function M.load_labels(ref_type)
+  local bufnr = vim.api.nvim_get_current_buf()
+  local cur_file = vim.api.nvim_buf_get_name(bufnr)
+  local cur_dir = vim.fn.fnamemodify(cur_file, ":h")
+  local ft = vim.bo[bufnr].filetype
+  local is_tex = ft == "tex" or ft == "latex"
+
+  local result = {}
+
+  if is_tex then
+    -- LaTeX buffers: only scan for LaTeX labels, no code chunks
+    local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+    vim.list_extend(result, labels_from_lines(lines, cur_file, true, ref_type))
+
+    local tex_files = vim.fn.globpath(cur_dir, "*.{tex,TEX}", false, true)
+    for _, f in ipairs(tex_files) do
+      if f ~= cur_file then
+        vim.list_extend(result, labels_from_file(f, ref_type))
+      end
+    end
+  else
+    -- R Markdown / Quarto / Markdown: code chunks + LaTeX labels
+    result = M.load_chunks()
+
+    local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+    vim.list_extend(result, labels_from_lines(lines, cur_file, true, ref_type))
+
+    local rmd_files = vim.fn.globpath(cur_dir, "*.{rmd,Rmd,qmd,Qmd}", false, true)
+    for _, f in ipairs(rmd_files) do
+      if f ~= cur_file then
+        vim.list_extend(result, labels_from_file(f, ref_type))
+      end
+    end
+  end
+
   return result
 end
 
