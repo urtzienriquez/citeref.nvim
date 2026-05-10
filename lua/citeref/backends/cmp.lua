@@ -54,7 +54,7 @@ local function citation_items(format)
 end
 
 local function crossref_items(ref_type)
-  local chunks = parse.load_chunks()
+  local chunks = parse.load_labels(ref_type)
   local bufnr = vim.api.nvim_get_current_buf()
   local items = {}
   for _, c in ipairs(chunks) do
@@ -64,7 +64,7 @@ local function crossref_items(ref_type)
       detail = "⚠ needs a label to use in a cross-reference"
       kind_val = KIND.Field
     else
-      insert = parse.format_crossref(ref_type, c.label, bufnr)
+      insert = parse.format_crossref(ref_type, c.label, bufnr, c.source)
       detail = ref_type .. " · line " .. c.line .. (c.is_current and "" or " · " .. vim.fn.fnamemodify(c.file, ":t"))
       kind_val = KIND.Value
     end
@@ -82,7 +82,7 @@ end
 --- In Quarto, crossrefs use plain `@label` regardless of fig/tab type,
 --- so each chunk should appear exactly once rather than twice.
 local function crossref_items_quarto()
-  local chunks = parse.load_chunks()
+  local chunks = parse.load_labels(nil)
   local items = {}
   for _, c in ipairs(chunks) do
     local insert, detail, kind_val
@@ -161,6 +161,15 @@ function Source:complete(request, callback)
   -- LaTeX citation trigger: \cite{...}
   if before:match("\\[%a]*cite[%a]*%{$") then
     callback({ items = citation_items("latex_key"), isIncomplete = false })
+    return
+  end
+
+  -- LaTeX crossref trigger: \ref{…}
+  if (ft == "tex" or ft == "latex") and before:match("\\ref{[%w_%-:.]*$") then
+    local items = {}
+    vim.list_extend(items, crossref_items("fig"))
+    vim.list_extend(items, crossref_items("tab"))
+    callback({ items = items, isIncomplete = false })
     return
   end
 

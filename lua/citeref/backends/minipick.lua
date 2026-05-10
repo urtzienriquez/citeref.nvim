@@ -375,7 +375,7 @@ function M.pick_crossref(ref_type, chunks, ctx)
           end)
           return
         end
-        local crossref = parse.format_crossref(ref_type, chunk.label, ctx.bufnr)
+        local crossref = parse.format_crossref(ref_type, chunk.label, ctx.bufnr, chunk.source)
         insert_after_pick(ctx, crossref)
       end,
     },
