@@ -174,7 +174,7 @@ end)
 -- ─────────────────────────────────────────────────────────────
 
 describe("format_crossref", function()
-  local qmd_buf, rmd_buf, md_buf, tex_buf, latex_buf
+  local qmd_buf, rmd_buf, md_buf, tex_buf, latex_buf, rnoweb_buf
 
   before_each(function()
     qmd_buf = vim.api.nvim_create_buf(false, true)
@@ -182,11 +182,13 @@ describe("format_crossref", function()
     md_buf = vim.api.nvim_create_buf(false, true)
     tex_buf = vim.api.nvim_create_buf(false, true)
     latex_buf = vim.api.nvim_create_buf(false, true)
+    rnoweb_buf = vim.api.nvim_create_buf(false, true)
     vim.bo[qmd_buf].filetype = "quarto"
     vim.bo[rmd_buf].filetype = "rmd"
     vim.bo[md_buf].filetype = "markdown"
     vim.bo[tex_buf].filetype = "tex"
     vim.bo[latex_buf].filetype = "latex"
+    vim.bo[rnoweb_buf].filetype = "rnoweb"
   end)
 
   after_each(function()
@@ -195,6 +197,7 @@ describe("format_crossref", function()
     vim.api.nvim_buf_delete(md_buf, { force = true })
     vim.api.nvim_buf_delete(tex_buf, { force = true })
     vim.api.nvim_buf_delete(latex_buf, { force = true })
+    vim.api.nvim_buf_delete(rnoweb_buf, { force = true })
   end)
 
   it("returns @label for quarto buffers (fig)", function()
@@ -235,6 +238,10 @@ describe("format_crossref", function()
 
   it("uses \\@ref(fig:label) for rmd when source is 'latex' with existing prefix", function()
     assert.equals("\\@ref(fig:myfig)", parse.format_crossref("fig", "fig:myfig", rmd_buf, "latex"))
+  end)
+
+  it("returns \\ref{label} for rnoweb buffers", function()
+    assert.equals("\\ref{myfig}", parse.format_crossref("fig", "myfig", rnoweb_buf))
   end)
 end)
 
@@ -714,5 +721,88 @@ describe("load_labels with tex/latex buffers", function()
     local labels = parse.load_labels("fig")
     assert.equals(1, #labels)
     assert.equals("figincap", labels[1].label)
+  end)
+end)
+
+-- ─────────────────────────────────────────────────────────────
+-- chunk parsing from rnw file
+-- ─────────────────────────────────────────────────────────────
+
+describe("chunk parsing from rnw file", function()
+  local chunks
+
+  before_each(function()
+    local path = FIXTURES .. "sample.rnw"
+    local buf = vim.api.nvim_create_buf(false, true)
+    local lines = vim.fn.readfile(path)
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+    vim.api.nvim_buf_set_name(buf, path)
+
+    local save_ei = vim.o.eventignore
+    vim.o.eventignore = "all"
+    vim.bo[buf].filetype = "rnoweb"
+    vim.api.nvim_set_current_buf(buf)
+    vim.o.eventignore = save_ei
+
+    local all = require("citeref.parse").load_chunks()
+    chunks = {}
+    for _, c in ipairs(all) do
+      if c.is_current then
+        chunks[#chunks + 1] = c
+      end
+    end
+  end)
+
+  after_each(function()
+    local buf = vim.fn.bufnr(vim.fn.fnamemodify("tests/fixtures/sample.rnw", ":p"))
+    if buf ~= -1 then
+      vim.api.nvim_buf_delete(buf, { force = true })
+    end
+  end)
+
+  it("finds the correct total number of chunks", function()
+    assert.equals(6, #chunks)
+  end)
+
+  it("parses standalone name labels (<<name>>=)", function()
+    local labels = {}
+    for _, c in ipairs(chunks) do
+      labels[#labels + 1] = c.label
+    end
+    assert.truthy(vim.tbl_contains(labels, "setup"))
+    assert.truthy(vim.tbl_contains(labels, "my-plot"))
+  end)
+
+  it("parses explicit label= option (<<label=name>>=)", function()
+    local labels = {}
+    for _, c in ipairs(chunks) do
+      labels[#labels + 1] = c.label
+    end
+    assert.truthy(vim.tbl_contains(labels, "my-table"))
+  end)
+
+  it("parses label among other options (<<echo=TRUE, label=name>>=)", function()
+    local labels = {}
+    for _, c in ipairs(chunks) do
+      labels[#labels + 1] = c.label
+    end
+    assert.truthy(vim.tbl_contains(labels, "fig-line"))
+  end)
+
+  it("marks empty-header chunks as unnamed (<<>>=)", function()
+    local unnamed = vim.tbl_filter(function(c)
+      return c.label == ""
+    end, chunks)
+    assert.equals(2, #unnamed)
+  end)
+
+  it("stores the correct file path", function()
+    assert.matches("sample%.rnw", chunks[1].file)
+  end)
+
+  it("stores a positive line number", function()
+    for _, c in ipairs(chunks) do
+      assert.is_true(c.line > 0)
+    end
   end)
 end)

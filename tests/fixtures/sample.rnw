@@ -1,0 +1,29 @@
+\documentclass{article}
+\begin{document}
+
+Some text here.
+
+<<setup, include=FALSE>>=
+knitr::opts_chunk$set(echo = TRUE)
+@
+
+<<my-plot>>=
+plot(1:10)
+@
+
+<<label=my-table>>=
+knitr::kable(head(mtcars))
+@
+
+<<echo=TRUE, label=fig-line>>=
+plot(1:10, type="l")
+@
+
+<<>>=
+x <- 1
+@
+
+<<echo=TRUE>>=
+y <- 2
+@
+\end{document}
