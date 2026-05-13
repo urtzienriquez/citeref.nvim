@@ -37,7 +37,14 @@ function M.reenter_insert(buf, win, row, col, inserted_len)
 
   local key = target_col >= #line and vim.api.nvim_replace_termcodes("a", true, false, true)
     or vim.api.nvim_replace_termcodes("i", true, false, true)
-  pcall(vim.api.nvim_feedkeys, key, "n", true)
+
+  vim.cmd("set eventignore+=InsertEnter")
+  vim.api.nvim_feedkeys(key, "n", true)
+  local restore = vim.api.nvim_replace_termcodes(
+    "<C-o>:set eventignore-=InsertEnter<CR>",
+    true, false, true
+  )
+  vim.api.nvim_feedkeys(restore, "n", true)
 end
 
 function M.insert_at_context(ctx, text)
