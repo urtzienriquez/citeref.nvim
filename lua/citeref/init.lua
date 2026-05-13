@@ -62,6 +62,7 @@ function M.cite_latex()
       options[#options + 1] = { cmd = f.cmd, label = f.label }
     end
 
+    local ctx = require("citeref.util").save_context()
     vim.ui.select(options, {
       prompt = "LaTeX format: ",
       format_item = function(item)
@@ -69,7 +70,7 @@ function M.cite_latex()
       end,
     }, function(choice)
       local cmd = choice and choice.cmd or nil
-      registry.call("pick_citation", "latex", entries, require("citeref.util").save_context(), cmd)
+      registry.call("pick_citation", "latex", entries, ctx, cmd)
     end)
   elseif insert_mode() then
     registry.call("show", "citation", "latex")
@@ -105,6 +106,7 @@ function M.cite_myst()
       options[#options + 1] = { cmd = f.cmd, label = f.label }
     end
 
+    local ctx = require("citeref.util").save_context()
     vim.ui.select(options, {
       prompt = "MyST format: ",
       format_item = function(item)
@@ -112,7 +114,7 @@ function M.cite_myst()
       end,
     }, function(choice)
       local cmd = choice and choice.cmd or nil
-      registry.call("pick_citation", "myst", entries, require("citeref.util").save_context(), cmd)
+      registry.call("pick_citation", "myst", entries, ctx, cmd)
     end)
   else
     vim.notify(
