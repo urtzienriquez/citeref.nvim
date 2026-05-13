@@ -246,7 +246,7 @@ function M.format_crossref(ref_type, label, bufnr, source)
   if ft == "quarto" then
     return "@" .. label
   end
-  if ft == "tex" or ft == "latex" then
+  if ft == "tex" or ft == "latex" or ft == "rnoweb" then
     return string.format("\\ref{%s}", label)
   end
   if source == "latex" then
@@ -396,12 +396,31 @@ end
 
 local CHUNK_LANGS = { r = true, python = true, julia = true, ojs = true, observable = true }
 
---- Check if a line is a chunk fence opener (```{r ...} or ```{r}).
+--- Check if a line is a chunk fence opener for Rmd/Quarto (```{r ...}) or Rnw (<<...>>=).
 --- Returns true if so, along with any inline label found on that line.
 ---@param line string
 ---@return boolean is_fence
 ---@return string inline_label  empty string if none on this line
 local function is_chunk_fence(line)
+  -- Rnw chunk: <<name>>=, <<label=name>>=, <<opt, label=name, ...>>=
+  -- The first token before any comma is the chunk name (acts as label) if it
+  -- contains no `=`. An explicit `label=name` option overrides this.
+  local rnw_content = line:match("^%s*<<(.-)>>=%s*$")
+  if rnw_content then
+    rnw_content = rnw_content:gsub("^%s+", ""):gsub("%s+$", "")
+    local explicit_label = rnw_content:match("label%s*=%s*([^,%s]+)")
+    if explicit_label then
+      return true, explicit_label
+    end
+    local first_token = rnw_content:match("^([^,]+)")
+    if first_token and not first_token:find("=") then
+      first_token = first_token:gsub("^%s+", ""):gsub("%s+$", "")
+      return true, first_token
+    end
+    return true, ""
+  end
+
+  -- R Markdown / Quarto fence: ```{r ...} etc.
   local lang = line:match("^```{(%a+)")
   if not lang or not CHUNK_LANGS[lang:lower()] then
     return false, ""
@@ -530,7 +549,7 @@ local function chunks_from_file(filepath)
   return chunks
 end
 
---- Return all chunks from the current buffer + sibling rmd/qmd files.
+--- Return all chunks from the current buffer + sibling rmd/qmd/rnw files.
 ---@return CiterefChunk[]
 function M.load_chunks()
   local bufnr = vim.api.nvim_get_current_buf()
@@ -538,7 +557,7 @@ function M.load_chunks()
   local cur_dir = vim.fn.fnamemodify(cur_file, ":h")
 
   local result = chunks_from_buf(bufnr)
-  local rmd_files = vim.fn.globpath(cur_dir, "*.{rmd,Rmd,qmd,Qmd}", false, true)
+  local rmd_files = vim.fn.globpath(cur_dir, "*.{rmd,Rmd,qmd,Qmd,rnw,Rnw}", false, true)
   for _, f in ipairs(rmd_files) do
     if f ~= cur_file then
       vim.list_extend(result, chunks_from_file(f))
@@ -691,7 +710,7 @@ function M.load_labels(ref_type)
     local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
     vim.list_extend(result, labels_from_lines(lines, cur_file, true, ref_type))
 
-    local rmd_files = vim.fn.globpath(cur_dir, "*.{rmd,Rmd,qmd,Qmd}", false, true)
+    local rmd_files = vim.fn.globpath(cur_dir, "*.{rmd,Rmd,qmd,Qmd,rnw,Rnw}", false, true)
     for _, f in ipairs(rmd_files) do
       if f ~= cur_file then
         vim.list_extend(result, labels_from_file(f, ref_type))
