@@ -44,7 +44,21 @@ Without `setup()`, only `*.bib` files in the **current working directory** are u
 
 ## Installation
 
-### lazy.nvim
+<details open>
+<summary><strong>Neovim native package manager</strong></summary>
+
+```lua
+vim.pack.add({
+  'https://github.com/urtzienriquez/citeref.nvim',
+})
+
+require("citeref").setup({
+  backend   = "fzf",   -- required: "fzf" | "telescope" | "snacks" | "minipick" | "blink" | "cmp"
+  bib_files = { "/path/to/your/library.bib" },
+})
+```
+
+</details> <details> <summary><strong>lazy.nvim</strong></summary>
 
 ```lua
 {
@@ -58,6 +72,8 @@ Without `setup()`, only `*.bib` files in the **current working directory** are u
   end,
 }
 ```
+
+</details>
 
 ### blink.cmp source
 

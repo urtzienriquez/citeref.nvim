@@ -1,0 +1,722 @@
+*doc/citeref.txt*  *citeref* *citeref.nvim*
+
+==============================================================================
+CONTENTS                                                    *citeref-contents*
+
+  1. Introduction ............................ |citeref-introduction|
+  2. Requirements ............................ |citeref-requirements|
+  3. Installation ............................ |citeref-installation|
+  4. Configuration ........................... |citeref-config|
+  5. Keymaps ................................. |citeref-keymaps|
+  6. Public API .............................. |citeref-api|
+  7. Citation Format Selection ............... |citeref-citation-formats|
+  8. Completion Triggers ..................... |citeref-completion|
+  9. Bib File Resolution ..................... |citeref-bib-files|
+  10. Cross-references ....................... |citeref-crossrefs|
+  11. Custom Backends ........................ |citeref-custom-backends|
+  12. Architecture ........................... |citeref-architecture|
+
+==============================================================================
+INTRODUCTION                                            *citeref-introduction*
+
+citeref.nvim inserts citations from BibTeX (.bib) files and cross-references
+to code chunks and LaTeX labels without leaving Neovim.
+
+Citations~
+  citeref discovers .bib files in your working directory and any configured
+  global libraries. A fuzzy picker (fzf-lua, telescope, snacks, mini.pick)
+  lets you search by key, title, author, or journal with a live preview; a
+  completion backend (blink.cmp, nvim-cmp) offers the same entries inline
+  as you type `@` or `\cite{`.
+
+Cross-references~
+  citeref scans the current buffer and its sibling files for named code
+  chunks (R, Python, Julia) and LaTeX \label{} definitions inside
+  figure/table environments. The correct reference syntax is inserted
+  based on your document type:
+    - Quarto (.qmd) ........... `@label`
+    - R Markdown (.rmd) ....... `\@ref(label)`
+    - LaTeX (.tex, .latex) .... `\ref{label}`
+    - Rnoweb (.rnw) ........... `\ref{label}`
+
+Backends~
+  citeref supports two kinds of backends:
+    - Picker backends (fzf-lua, telescope, snacks, mini.pick) — launch a
+      searchable picker with preview; work in both insert and normal mode.
+    - Completion backends (blink.cmp, nvim-cmp) — show items in the
+      completion menu as you type; insert mode only.
+
+  One backend must be configured. There is no auto-detection.
+
+==============================================================================
+REQUIREMENTS                                            *citeref-requirements*
+
+Neovim >= 0.9 (for vim.ui.select and vim.tbl_deep_extend).
+
+One of these backends (required, no auto-detection):
+  - fzf-lua .......... https://github.com/ibhagwan/fzf-lua
+  - telescope.nvim ... https://github.com/nvim-telescope/telescope.nvim
+  - snacks.nvim ...... https://github.com/folke/snacks.nvim
+  - mini.pick ........ https://github.com/echasnovski/mini.pick
+  - blink.cmp ........ https://github.com/Saghen/blink.cmp
+  - nvim-cmp ......... https://github.com/hrsh7th/nvim-cmp
+
+==============================================================================
+INSTALLATION                                            *citeref-installation*
+
+Neovim native plugin manager~
+>lua
+    vim.pack.add({
+      'https://github.com/urtzienriquez/citeref.nvim',
+    })
+
+    require("citeref").setup({
+      backend   = "fzf",
+      bib_files = { "/path/to/your/library.bib" },
+    })
+<
+
+lazy.nvim~
+>lua
+    {
+      "urtzienriquez/citeref.nvim",
+      ft = { "markdown", "rmd", "quarto", "rnoweb", "pandoc", "tex", "latex" },
+      config = function()
+        require("citeref").setup({
+          backend   = "fzf",
+          bib_files = { "/path/to/your/library.bib" },
+        })
+      end,
+    }
+<
+
+blink.cmp source~
+  Register citeref as a blink.cmp provider. The module path points to the
+  blink backend:
+
+>lua
+    -- in your blink.cmp config:
+    sources = {
+      default = { "lsp", "path", "snippets", "buffer" },
+      providers = {
+        citeref = {
+          name   = "citeref",
+          module = "citeref.backends.blink",
+        },
+      },
+      per_filetype = {
+        markdown = { inherit_defaults = true, "citeref" },
+        rmd      = { inherit_defaults = true, "citeref" },
+        quarto   = { inherit_defaults = true, "citeref" },
+        tex      = { inherit_defaults = true, "citeref" },
+        latex    = { inherit_defaults = true, "citeref" },
+      },
+    },
+<
+
+nvim-cmp source~
+  Register the source before cmp.setup() so nvim-cmp knows about it:
+
+>lua
+    require("citeref.backends.cmp").register()
+
+    sources = cmp.config.sources({
+      { name = "nvim_lsp" },
+      { name = "citeref" },
+    })
+<
+
+==============================================================================
+CONFIGURATION                                            *citeref-config*
+
+
+                                                    *citeref-setup-example*
+>lua
+    require("citeref").setup({
+      -- REQUIRED – no auto-detection.
+      --   "fzf"       → fzf-lua
+      --   "telescope" → telescope.nvim
+      --   "snacks"    → snacks.nvim
+      --   "minipick"  → mini.pick
+      --   "blink"     → blink.cmp (insert only)
+      --   "cmp"       → nvim-cmp   (insert only)
+      backend = "fzf",
+
+      -- Filetypes where citeref activates.
+      filetypes = {
+        "markdown", "rmd", "quarto", "rnoweb", "pandoc", "tex", "latex",
+      },
+
+      -- .bib files for citations.
+      -- cwd *.bib files are always included automatically.
+      --   string[]         → explicit paths (~ expanded; missing warned once)
+      --   fun(): string[]  → called each time a picker opens (dynamic)
+      bib_files = { "/path/to/your/library.bib" },
+
+      -- Default LaTeX cite format when "default" is chosen in the
+      -- vim.ui.select prompt. Press <C-l> inside the picker to cycle.
+      default_latex_format = "cite",
+
+      -- Default MyST cite role when "default" is chosen.
+      default_myst_format = "cite:p",
+
+      keymaps = {
+        enabled = true,
+        cite_markdown_i   = "<C-a>m",
+        cite_markdown_n   = "<leader>am",
+        cite_latex_i      = "<C-a>l",
+        cite_latex_n      = "<leader>al",
+        cite_myst_i       = "<C-a>s",
+        cite_myst_n       = "<leader>as",
+        cite_replace_n    = "<leader>ar",
+        crossref_figure_i = "<C-a>f",
+        crossref_figure_n = "<leader>af",
+        crossref_table_i  = "<C-a>t",
+        crossref_table_n  = "<leader>at",
+      },
+
+      picker = {
+        -- fzf / telescope: "vertical" | "horizontal"
+        -- snacks:          any snacks preset name
+        layout       = "vertical",
+        preview_size = "50%",       -- fzf / telescope only
+      },
+    })
+<
+
+
+                                                    *citeref-without-setup*
+  If you call require("citeref").setup() without a backend, citeref warns
+  once and continues with defaults. Without any setup() call at all, only
+  *.bib files in the current working directory are used; the backend is
+  still required.
+
+                                          *citeref-config-default_latex_format*
+default_latex_format~
+  Valid values: cite, citep, citet, citeauthor, citeyear, citealt, textcite,
+  parencite, footcite, autocite, nocite.
+
+  Set on the fly without re-running setup():
+>lua
+    require("citeref").set_latex_format("citep")
+<
+
+                                            *citeref-config-default_myst_format*
+default_myst_format~
+  Valid values: cite:p, cite:t.
+
+  Set on the fly without re-running setup():
+>lua
+    require("citeref").set_myst_format("cite:t")
+<
+
+bib_files~
+  Accepts either a list of file paths or a function that returns paths:
+>lua
+    -- Static
+    bib_files = { "/path/to/library.bib" }
+
+    -- Dynamic — re-evaluated on every picker open
+    bib_files = function()
+      return vim.fn.globpath(vim.fn.getcwd(), "**/*.bib", false, true)
+    end
+<
+
+  Missing files produce a one-time warning. Duplicates are removed.
+
+keymaps~
+  Set keymaps.enabled = false to disable all default mappings, then define
+  your own:
+>lua
+    require("citeref").setup({
+      backend = "fzf",
+      keymaps = { enabled = false },
+    })
+
+    vim.api.nvim_create_autocmd("FileType", {
+      pattern = { "markdown", "quarto", "rmd" },
+      callback = function()
+        local cr = require("citeref")
+        vim.keymap.set("i", "<M-c>", cr.cite_markdown,   { buffer = true })
+        vim.keymap.set("i", "<M-r>", cr.crossref_figure, { buffer = true })
+      end,
+    })
+<
+
+  Set any individual keymap to false to disable only that mapping.
+
+picker~
+  The layout option depends on the backend:
+    - fzf / telescope: "vertical" (default) or "horizontal"
+    - snacks:          any snacks preset — "default", "vertical",
+                       "horizontal", "telescope", "ivy", "ivy_split",
+                       "select", "sidebar", "vscode"
+    - minipick:        ignored (mini.pick uses MiniPick.config)
+
+  preview_size is used by fzf and telescope only.
+
+==============================================================================
+KEYMAPS                                                    *citeref-keymaps*
+
+Default buffer-local keymaps. Set |citeref-config| keymaps table to
+customize.
+
+Mode      Key              Action                          Requires~
+----      ---              ------                          --------
+insert    <C-a>m           Insert citation @key            any backend
+normal    <leader>am       Insert citation @key            picker backend
+insert    <C-a>l           Insert LaTeX citation           any backend
+normal    <leader>al       Insert LaTeX citation           picker backend
+insert    <C-a>s           Insert MyST citation            any backend
+normal    <leader>as       Insert MyST citation            picker backend
+normal    <leader>ar       Replace citation under cursor   picker backend
+insert    <C-a>f           Insert figure crossref          any backend
+normal    <leader>af       Insert figure crossref          picker backend
+insert    <C-a>t           Insert table crossref           any backend
+normal    <leader>at       Insert table crossref          picker backend
+
+Normal-mode keymaps with a completion backend show a warning — there is no
+picker equivalent without fzf-lua, telescope, snacks, or mini.pick.
+
+======================================================================
+PUBLIC API                                                  *citeref-api*
+
+All public functions are on the module returned by require("citeref").
+
+                                                   *citeref-setup()*
+setup({opts})~
+  Configure citeref and attach to all currently loaded buffers that match
+  the configured filetypes. See |citeref-config|.
+
+                                            *citeref-cite_markdown()*
+cite_markdown()~
+  Insert a markdown citation @key.
+  Picker: opens picker. Completion: shows completion menu.
+  In normal mode without a picker backend, shows a warning.
+
+                                              *citeref-cite_latex()*
+cite_latex()~
+  Insert a LaTeX citation (\cite{key}, \citep{key}, etc.).
+  Picker: shows a |vim.ui.select| dialog to choose a format first, then
+  opens the picker. Completion: shows completion menu.
+  Press <C-l> inside the picker to cycle formats.
+
+                                               *citeref-cite_myst()*
+cite_myst()~
+  Insert a MyST citation ({cite:p}`key`, {cite:t}`key`).
+  Same format-selection flow as |citeref-cite_latex()|.
+
+                                           *citeref-cite_replace()*
+cite_replace()~
+  Replace the citation key under the cursor. Opens the picker with the
+  current entry marked "(current)". Picker backends only.
+
+                                         *citeref-crossref_figure()*
+crossref_figure()~
+  Insert a figure cross-reference. Picker: opens picker with figure labels.
+  Completion: shows completion menu filtered to figure labels.
+
+                                          *citeref-crossref_table()*
+crossref_table()~
+  Insert a table cross-reference. Same pattern as crossref_figure() for
+  table labels.
+
+                                     *citeref-set_latex_format()*
+set_latex_format({format})~
+  Change the default LaTeX format for the current session. Validates the
+  format and updates config directly without triggering the backend
+  configuration warning. Useful for per-document format switching.
+
+  Example:
+>lua
+    require("citeref").set_latex_format("citep")
+<
+
+  Invalid values produce a warning listing valid options.
+
+                                       *citeref-set_myst_format()*
+set_myst_format({format})~
+  Change the default MyST format for the current session. Same pattern
+  as |citeref-set_latex_format()|.
+
+  Example:
+>lua
+    require("citeref").set_myst_format("cite:t")
+<
+
+                                       *citeref-register_backend()*
+register_backend({name}, {backend})~
+  Register a custom backend table. See |citeref-custom-backends| for the
+  full interface contract.
+
+                                                   *citeref-attach()*
+attach()~
+  Attach citeref to the current buffer. Sets buffer-local keymaps.
+  Called automatically by the FileType autocmd. Idempotent per buffer.
+
+                                                    *citeref-debug()*
+debug()~
+  Print buffer number, filetype, attachment status, backend, and all
+  active citeref buffer keymaps.
+
+==============================================================================
+CITATION FORMAT SELECTION                        *citeref-citation-formats*
+
+When using a picker backend, both the LaTeX and MyST citation pickers first
+show a |vim.ui.select| dialog to choose a format. This lets you pick a
+specific format without cycling through the list.
+
+The first option is always "default" — selecting it (or pressing <Esc>)
+opens the picker with your configured default format:
+
+Citation type   Config option               Default ~
+LaTeX           default_latex_format        \cite{}
+MyST            default_myst_format         {cite:p}
+
+Selecting any other format opens the picker with that format active.
+
+Format cycling inside the picker~
+  Once the picker is open, press <C-l> to cycle through all available
+  formats. The current format is shown in the picker title; a notification
+  confirms each cycle.
+
+LaTeX formats~
+  Command              Output~
+  \cite{}              \cite{key}
+  \citep{}             \citep{key}
+  \citet{}             \citet{key}
+  \citeauthor{}        \citeauthor{key}
+  \citeyear{}          \citeyear{key}
+  \citealt{}           \citealt{key}
+  \textcite{}          \textcite{key}
+  \parencite{}         \parencite{key}
+  \footcite{}          \footcite{key}
+  \autocite{}          \autocite{key}
+  \nocite{}            \nocite{key}
+
+MyST formats~
+  Command              Output~
+  {cite:p}             {cite:p}`key`
+  {cite:t}             {cite:t}`key`
+
+Setting the default format~
+  In your setup:
+>lua
+    require("citeref").setup({
+      backend              = "fzf",
+      default_latex_format = "citep",
+      default_myst_format  = "cite:t",
+    })
+<
+
+  Or on the fly per-document:
+>lua
+    require("citeref").set_latex_format("citep")
+    require("citeref").set_myst_format("cite:t")
+<
+
+  Completion backends (blink, cmp) trigger on `@` for markdown and `\cite{`
+  for LaTeX. They do not support format selection or cycling — the format
+  is determined by what you type.
+
+==============================================================================
+COMPLETION TRIGGERS                                   *citeref-completion*
+
+When using a completion backend (blink or cmp), citeref activates
+automatically. The full trigger set is:
+
+What you type                     Filetype          Items offered ~
+@                                 Rmd / Markdown    Citations only
+@                                 Quarto            Citations + chunk crossrefs
+\cite{ / \citep{ / \parencite{..} any              Citation keys (completes {})
+\ref{                             tex / latex       All crossref labels
+\@ref(                            R Markdown        All chunk labels
+\@ref(fig:                        R Markdown        Figure chunk labels only
+\@ref(tab:                        R Markdown        Table chunk labels only
+
+In Quarto, `@` is the universal trigger for both citations and crossrefs —
+the menu offers both together and you filter by typing.
+
+The keymaps (|citeref-keymaps|) are still available with completion
+backends as an alternative way to open the menu pre-filtered to a specific
+type.
+
+==============================================================================
+BIB FILE RESOLUTION                                  *citeref-bib-files*
+
+Without setup(), citeref scans only *.bib files in the current working
+directory. If none are found, it warns once when you trigger a citation.
+
+With setup({ bib_files = { ... } }), the configured files are merged with
+any cwd *.bib files (duplicates removed). Missing configured files produce
+a one-time warning.
+
+Static configuration:
+>lua
+    require("citeref").setup({
+      backend   = "fzf",
+      bib_files = { "/path/to/your/library.bib" },
+    })
+<
+
+Dynamic configuration (re-evaluated on every picker open):
+>lua
+    require("citeref").setup({
+      backend   = "fzf",
+      bib_files = function()
+        return vim.fn.globpath(vim.fn.getcwd(), "**/*.bib", false, true)
+      end,
+    })
+<
+
+==============================================================================
+CROSS-REFERENCES                                      *citeref-crossrefs*
+
+Overview~
+  The crossref pickers scan:
+    1. The current buffer
+    2. All sibling .{rmd,Rmd,qmd,Qmd,rnw,Rnw} files in the same directory
+    3. For LaTeX (.tex) buffers: sibling .{tex,TEX} files
+
+Code chunks~
+  citeref detects named code chunks in **R**, **Python**, and **Julia**
+  across R Markdown, Quarto, and Rnoweb documents.
+
+  R Markdown / knitr inline label (R only):
+>markdown
+    ```{r myplot, fig.cap="My caption"}
+    # referenced as \@ref(fig:myplot)
+    ```
+<
+
+  Quarto YAML options (all languages — #| label: inside the chunk):
+>markdown
+    ```{r}
+    #| label: myplot
+    #| fig-cap: "My caption"
+    ```
+<
+
+  Rnoweb chunk syntax (.rnw):
+>latex
+    <<my-plot>>=
+    plot(1:10)
+    @
+<
+
+LaTeX labels~
+  Labels inside \begin{figure} / \begin{figure*} and \begin{table} /
+  \begin{table*} environments are detected in any filetype:
+>latex
+    \begin{figure}[htbp]
+      \centering
+      \includegraphics{birds.jpg}
+      \caption{The birds}
+      \label{fig:birds}
+    \end{figure}
+<
+
+  The environment type is tracked automatically: figure labels appear only
+  in the figure picker, table labels only in the table picker. Commented-
+  out environments (% \begin{figure}) are ignored. Labels outside any
+  recognised environment are skipped.
+
+  Using fig: / tab: prefixes is optional — citeref preserves the label
+  as-is without adding or removing prefixes.
+
+Inserted syntax~
+  The reference format depends on the filetype of the buffer you are
+  editing:
+
+  Filetype          Source          Figure crossref          Table crossref ~
+  quarto (.qmd)     code chunk      @fig-example             @tbl-example
+  quarto (.qmd)     \label          @label (echoed as-is)    @label (echoed as-is)
+  rmd, markdown     code chunk      \@ref(fig:example)       \@ref(tab:example)
+  rmd, markdown     \label          \@ref(label) (echoed)    \@ref(label) (echoed)
+  rnoweb (.rnw)     code chunk      \ref{example}            \ref{example}
+  rnoweb (.rnw)     \label          \ref{label} (echoed)     \ref{label} (echoed)
+  tex, latex        \label          \ref{label} (echoed)     \ref{label} (echoed)
+
+  Unnamed chunks appear with a warning label; selecting one produces a
+  notification telling you to add a label first.
+
+==============================================================================
+CUSTOM BACKENDS                                        *citeref-custom-backends*
+
+You can register any table as a backend — from your own config, from a
+separate plugin, or to override a built-in.
+
+>lua
+    require("citeref").register_backend("my_picker", {
+      pick_citation = function(format, entries, ctx, cmd)
+        -- format: "markdown" | "latex" | "myst"
+        -- entries: CiterefEntry[]
+        -- ctx:     saved cursor context
+        -- cmd:     optional format command, or nil for default
+      end,
+
+      pick_crossref = function(ref_type, chunks, ctx)
+        -- ref_type: "fig" | "tab"
+        -- chunks:   CiterefChunk[]
+        -- ctx:      also carries ctx.bufnr — the buffer being edited
+      end,
+
+      replace = function(entries, info)
+        -- info: { key, start_col, end_col, style ("markdown"|"latex"), ... }
+      end,
+
+      -- Completion backends only:
+      register = function() end,
+      show     = function(mode, format) end,
+    })
+<
+
+  Only implement the functions your backend supports. citeref checks for
+  nil before calling and warns if a required function is missing.
+
+Shared parsers~
+  The parsers from |citeref-parse| are available for reuse:
+
+>lua
+    local parse = require("citeref.parse")
+
+    parse.load_entries()                           -- CiterefEntry[]
+    parse.load_chunks()                            -- CiterefChunk[]
+    parse.load_labels(ref_type)                    -- CiterefChunk[]
+    parse.entry_display(entry)                     -- "key │ title │ author"
+    parse.entry_preview(entry)                     -- multi-line preview
+    parse.format_citation(keys)                    -- "@key1; @key2"
+    parse.format_crossref(ref_type, label, bufnr)  -- filetype-aware
+    parse.citation_under_cursor()                  -- info table or nil
+    parse.resolve_bib_files()                      -- string[]
+    parse.parse_bib(file_paths)                    -- CiterefEntry[]
+<
+
+  For LaTeX citations, build the string directly:
+>lua
+    "\\" .. cmd .. "{" .. table.concat(keys, ", ") .. "}"
+<
+
+  The available LaTeX commands are defined in |citeref-latex-format-list|.
+
+Data types~
+  CiterefEntry:
+    { key, title, author, year, journaltitle, abstract }
+
+  CiterefChunk:
+    { label, display, line, file, is_current, header, source? }
+
+  citation_under_cursor return values:
+    markdown: { key, start_col, end_col, style }
+    latex:    { key, start_col, end_col, style, cmd, all_keys,
+                cmd_start, cmd_end, brace_open, brace_close }
+    myst:     { key, start_col, end_col, style, cmd, prefix,
+                suffix, all_keys }
+
+                                                        *citeref-latex-format-list*
+  The 11 LaTeX format definitions from latex_formats.lua:
+>lua
+    { cmd = "cite",      label = "\\cite{}" }
+    { cmd = "citep",     label = "\\citep{}" }
+    { cmd = "citet",     label = "\\citet{}" }
+    { cmd = "citeauthor", label = "\\citeauthor{}" }
+    { cmd = "citeyear",  label = "\\citeyear{}" }
+    { cmd = "citealt",   label = "\\citealt{}" }
+    { cmd = "textcite",  label = "\\textcite{}" }
+    { cmd = "parencite", label = "\\parencite{}" }
+    { cmd = "footcite",  label = "\\footcite{}" }
+    { cmd = "autocite",  label = "\\autocite{}" }
+    { cmd = "nocite",    label = "\\nocite{}" }
+<
+
+  MyST format helpers:
+>lua
+    local myst = require("citeref.myst_formats")
+    myst.next(current_cmd)                    -- cycle to next format
+    myst.format(keys, cmd, prefix?, suffix?)  -- build {cmd}`prefix key suffix`
+    myst.replace_key(keys, old_key, new_key)  -- replace key in list
+<
+
+==============================================================================
+ARCHITECTURE                                          *citeref-architecture*
+
+Directory layout~
+>text
+    lua/citeref/
+      init.lua              Public API, setup, attach, keymaps
+      config.lua            Defaults, merge, validation, format tables
+      parse.lua             Bib parser, chunk parser, display helpers
+      util.lua              Cursor context, text insertion
+      latex_formats.lua     LaTeX cite command list
+      myst_formats.lua      MyST cite role list + helpers
+      backends/
+        init.lua            Registry, lazy-load, dispatch
+        fzf.lua             fzf-lua picker
+        telescope.lua       telescope.nvim picker
+        snacks.lua          snacks.nvim picker
+        minipick.lua        mini.pick picker
+        blink.lua           blink.cmp completion source
+        cmp.lua             nvim-cmp completion source
+    plugin/
+      citeref.lua           FileType autocommand (startup entry)
+<
+
+  Note: doc/citeref.txt is this help file, and README.md is the rendered
+  GitHub landing page.
+
+Lazy loading~
+
+  1. plugin/citeref.lua registers a single FileType autocmd. No modules
+     load at Neovim startup.
+  2. On buffer attach (FileType match), citeref.config and citeref.init
+     load (tiny, pure Lua, no external dependencies).
+  3. The backend module (citeref.backends.{fzf,telescope,...}) loads on
+     your first keypress via the backend registry.
+
+Startup cost is effectively zero — nothing loads until you open a
+supported filetype and press a citeref key.
+
+Module roles~
+
+  citeref.init (|citeref-api|)
+    Public entry point. setup() merges user options, attach() sets up
+    buffer keymaps. Each cite_* and crossref_* function checks the
+    backend type (picker vs completion) and dispatches accordingly.
+
+  citeref.config (|citeref-config|)
+    Defines all defaults, validates user input, provides set()/get().
+    Exports valid format tables for validation elsewhere. Lazy-initialises
+    options with a warning if setup() was never called.
+
+  citeref.parse (|citeref-custom-backends|)
+    Parses .bib files (BibTeX format), code chunk fences (Rmd/Quarto/Rnw),
+    and LaTeX \label definitions. Provides display helpers and citation-
+    under-cursor detection. Used by all backends.
+
+  citeref.util
+    Captures cursor context (window, buffer, row, col, insert mode) before
+    a picker opens and restores it after selection. Handles re-entering
+    insert mode when needed.
+
+  citeref.backends.init (|citeref-custom-backends|)
+    Registry that stores named backends. get() lazy-loads built-in backends
+    from citeref.backends.{name}. call(fn_name, ...) looks up the function
+    on the active backend and dispatches with varargs.
+
+  citeref.latex_formats
+    Single source of truth for the 11 LaTeX citation commands. Each entry
+    has cmd (e.g. "citep") and label (e.g. "\citep{}").
+
+  citeref.myst_formats
+    Two MyST cite roles (cite:p, cite:t) with cycle, format, and
+    replace_key helpers.
+
+
+==============================================================================
+
+Author:   Urtzi Enriquez
+License:  GNU General Public License v3.0
+Homepage: <https://github.com/urtzienriquez/citeref.nvim>
+
+==============================================================================
+ vim:tw=78:ts=8:ft=help:norl:
