@@ -704,8 +704,14 @@ function M.load_labels(ref_type)
       end
     end
   else
-    -- R Markdown / Quarto / Markdown: code chunks + LaTeX labels
-    result = M.load_chunks()
+    -- R Markdown / Quarto / Markdown / Rnoweb: code chunks + LaTeX labels
+    -- For rnoweb with tex_only, skip code chunks and only show LaTeX \label{}
+    local cfg = require("citeref.config").get()
+    local skip_chunks = ft == "rnoweb" and cfg.picker.rnoweb_labels == "tex_only"
+
+    if not skip_chunks then
+      result = M.load_chunks()
+    end
 
     local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
     vim.list_extend(result, labels_from_lines(lines, cur_file, true, ref_type))

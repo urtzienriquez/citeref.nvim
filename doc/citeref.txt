@@ -178,8 +178,11 @@ CONFIGURATION                                            *citeref-config*
       picker = {
         -- fzf / telescope: "vertical" | "horizontal"
         -- snacks:          any snacks preset name
-        layout       = "vertical",
-        preview_size = "50%",       -- fzf / telescope only
+        -- rnoweb_labels:   "all" (default) or "tex_only" (only \label{} in
+        --                  figure/table environments for .Rnw files)
+        layout        = "vertical",
+        preview_size  = "50%",       -- fzf / telescope only
+        rnoweb_labels = "all",
       },
     })
 <
@@ -254,6 +257,18 @@ picker~
     - minipick:        ignored (mini.pick uses MiniPick.config)
 
   preview_size is used by fzf and telescope only.
+
+                                  *citeref-config-picker-rnoweb_labels*
+  rnoweb_labels~
+    Controls what crossref targets appear in the figure/table pickers for
+    .Rnw files:
+      - "all" (default): code chunks + LaTeX \label{} inside figure/table
+        environments are shown together.
+      - "tex_only": only LaTeX \label{} targets from figure/table
+        environments are shown; code chunks are excluded.
+
+    This option only affects the rnoweb filetype. Other filetypes (rmd,
+    quarto, tex, etc.) are unchanged.
 
 ==============================================================================
 KEYMAPS                                                    *citeref-keymaps*
@@ -536,6 +551,10 @@ Inserted syntax~
   rnoweb (.rnw)     code chunk      \ref{example}            \ref{example}
   rnoweb (.rnw)     \label          \ref{label} (echoed)     \ref{label} (echoed)
   tex, latex        \label          \ref{label} (echoed)     \ref{label} (echoed)
+
+  For .Rnw buffers, you can restrict the figure/table pickers to only show
+  LaTeX \label{} targets (excluding code chunks) by setting
+  |citeref-config-picker-rnoweb_labels| to "tex_only".
 
   Unnamed chunks appear with a warning label; selecting one produces a
   notification telling you to add a label first.

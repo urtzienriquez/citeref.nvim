@@ -203,9 +203,13 @@ require("citeref").setup({
   --                     "ivy" | "ivy_split" | "select" | "sidebar" | "vscode"
   --   minipick        → not used (mini.pick layout is controlled via MiniPick.config)
   -- `preview_size` is used by fzf and telescope only.
+  -- `rnoweb_labels` controls which crossref targets appear for .Rnw files:
+  --   "all"      (default) — code chunks + LaTeX \label{} inside figure/table
+  --   "tex_only"           — only LaTeX \label{} inside figure/table (skip code chunks)
   picker = {
-    layout       = "vertical",
-    preview_size = "50%",
+    layout        = "vertical",
+    preview_size  = "50%",
+    rnoweb_labels = "all",
   },
 })
 ```
