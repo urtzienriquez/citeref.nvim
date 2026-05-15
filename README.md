@@ -44,7 +44,21 @@ Without `setup()`, only `*.bib` files in the **current working directory** are u
 
 ## Installation
 
-### lazy.nvim
+<details open>
+<summary><strong>Neovim native package manager</strong></summary>
+
+```lua
+vim.pack.add({
+  'https://github.com/urtzienriquez/citeref.nvim',
+})
+
+require("citeref").setup({
+  backend   = "fzf",   -- required: "fzf" | "telescope" | "snacks" | "minipick" | "blink" | "cmp"
+  bib_files = { "/path/to/your/library.bib" },
+})
+```
+
+</details> <details> <summary><strong>lazy.nvim</strong></summary>
 
 ```lua
 {
@@ -58,6 +72,8 @@ Without `setup()`, only `*.bib` files in the **current working directory** are u
   end,
 }
 ```
+
+</details>
 
 ### blink.cmp source
 
@@ -149,12 +165,14 @@ require("citeref").setup({
   -- Default LaTeX citation command used when "default" is selected from the
   -- format prompt. A vim.ui.select dialog opens first to let you pick a
   -- format; press <C-l> inside the picker to cycle through all formats.
-  -- Valid values: "cite" | "citep" | "citet" | "citeauthor" | "citeyear" | "citealt"
+  -- Valid values: cite | citep | citet | citeauthor | citeyear | citealt |
+  --               textcite | parencite | footcite | autocite | nocite
   default_latex_format = "cite",
 
   -- Default MyST citation role used when "default" is selected from the
   -- format prompt. A vim.ui.select dialog opens first to let you pick a
   -- format; press <C-l> inside the picker to cycle between {cite:p} and {cite:t}.
+  -- Valid values: "cite:p" | "cite:t"
   default_myst_format = "cite:p",
 
   keymaps = {
@@ -276,6 +294,8 @@ Once the picker is open, press **`<C-l>`** to cycle through all available format
 
 ### Setting the default format
 
+Set the default in `setup()`:
+
 ```lua
 require("citeref").setup({
   backend              = "fzf",
@@ -283,6 +303,15 @@ require("citeref").setup({
   default_myst_format  = "cite:t",
 })
 ```
+
+Or change it on the fly at any time:
+
+```lua
+require("citeref").set_latex_format("citep")
+require("citeref").set_myst_format("cite:t")
+```
+
+These update the session default directly without triggering the backend configuration warning — useful for switching formats per-document.
 
 Completion backends (`blink`, `cmp`) trigger on `@` for markdown and `\cite{` for LaTeX. They do not support format selection or cycling — the format is determined by what you type.
 
@@ -540,15 +569,17 @@ citeref is designed to have zero startup impact:
 ```lua
 local citeref = require("citeref")
 
-citeref.cite_markdown()      -- insert @key
-citeref.cite_latex()         -- insert \cite{key}
-citeref.cite_replace()       -- replace citation key under cursor (picker backends only)
-citeref.crossref_figure()    -- insert figure crossref (format depends on filetype)
-citeref.crossref_table()     -- insert table crossref  (format depends on filetype)
+citeref.cite_markdown()        -- insert @key
+citeref.cite_latex()           -- insert \cite{key}
+citeref.cite_replace()         -- replace citation key under cursor (picker backends only)
+citeref.crossref_figure()      -- insert figure crossref (format depends on filetype)
+citeref.crossref_table()       -- insert table crossref  (format depends on filetype)
+citeref.set_latex_format(cmd)  -- change default LaTeX format on the fly (e.g. "citep")
+citeref.set_myst_format(cmd)   -- change default MyST format on the fly  (e.g. "cite:t")
 
 citeref.register_backend(name, backend)  -- register a custom backend
 
-citeref.debug()              -- print backend, attachment status, and active keymaps
+citeref.debug()                -- print backend, attachment status, and active keymaps
 ```
 
 ---
