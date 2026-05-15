@@ -280,6 +280,54 @@ function M.attach()
 end
 
 -- ─────────────────────────────────────────────────────────────
+-- On-the-fly format overrides
+-- ─────────────────────────────────────────────────────────────
+
+--- Set the default LaTeX cite format for the current session.
+--- Valid values: see citeref.config.valid_latex_formats
+---@param format string
+function M.set_latex_format(format)
+  local config = require("citeref.config")
+  if not config.valid_latex_formats[format] then
+    local keys = vim.tbl_keys(config.valid_latex_formats)
+    table.sort(keys)
+    vim.notify(
+      "citeref: invalid latex format '"
+        .. tostring(format)
+        .. "'.\n"
+        .. "  Valid: " .. table.concat(keys, ", "),
+      vim.log.levels.WARN
+    )
+    return
+  end
+  config.options = config.options or vim.deepcopy(config.defaults)
+  config.options.default_latex_format = format
+  vim.notify("citeref: latex format set to '" .. format .. "'.", vim.log.levels.INFO)
+end
+
+--- Set the default MyST cite role for the current session.
+--- Valid values: see citeref.config.valid_myst_formats
+---@param format string
+function M.set_myst_format(format)
+  local config = require("citeref.config")
+  if not config.valid_myst_formats[format] then
+    local keys = vim.tbl_keys(config.valid_myst_formats)
+    table.sort(keys)
+    vim.notify(
+      "citeref: invalid myst format '"
+        .. tostring(format)
+        .. "'.\n"
+        .. "  Valid: " .. table.concat(keys, ", "),
+      vim.log.levels.WARN
+    )
+    return
+  end
+  config.options = config.options or vim.deepcopy(config.defaults)
+  config.options.default_myst_format = format
+  vim.notify("citeref: myst format set to '" .. format .. "'.", vim.log.levels.INFO)
+end
+
+-- ─────────────────────────────────────────────────────────────
 -- Setup & debug
 -- ─────────────────────────────────────────────────────────────
 

@@ -107,12 +107,16 @@ local VALID_LATEX_FORMATS = {
   parencite = true,
   footcite = true,
   autocite = true,
+  nocite = true,
 }
 
 local VALID_MYST_FORMATS = {
   ["cite:p"] = true,
   ["cite:t"] = true,
 }
+
+M.valid_latex_formats = VALID_LATEX_FORMATS
+M.valid_myst_formats = VALID_MYST_FORMATS
 
 ---@param opts? table
 function M.set(opts)
@@ -136,22 +140,26 @@ function M.set(opts)
   end
 
   if M.options.default_latex_format and not VALID_LATEX_FORMATS[M.options.default_latex_format] then
+    local keys = vim.tbl_keys(VALID_LATEX_FORMATS)
+    table.sort(keys)
     vim.notify(
       "citeref: unknown default_latex_format '"
         .. tostring(M.options.default_latex_format)
         .. "'.\n"
-        .. "  Valid values: 'cite', 'citep', 'citet', 'citeauthor', 'citeyear', 'citealt'.",
+        .. "  Valid values: " .. table.concat(keys, ", ") .. ".",
       vim.log.levels.WARN
     )
     M.options.default_latex_format = "cite"
   end
 
   if M.options.default_myst_format and not VALID_MYST_FORMATS[M.options.default_myst_format] then
+    local keys = vim.tbl_keys(VALID_MYST_FORMATS)
+    table.sort(keys)
     vim.notify(
       "citeref: unknown default_myst_format '"
         .. tostring(M.options.default_myst_format)
         .. "'.\n"
-        .. "  Valid values: 'cite:p' | 'cite:t'.",
+        .. "  Valid values: " .. table.concat(keys, ", ") .. ".",
       vim.log.levels.WARN
     )
     M.options.default_myst_format = "cite:p"
