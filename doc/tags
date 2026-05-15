@@ -12,6 +12,7 @@ citeref-completion	citeref.txt	/*citeref-completion*
 citeref-config	citeref.txt	/*citeref-config*
 citeref-config-default_latex_format	citeref.txt	/*citeref-config-default_latex_format*
 citeref-config-default_myst_format	citeref.txt	/*citeref-config-default_myst_format*
+citeref-config-picker-rnoweb_labels	citeref.txt	/*citeref-config-picker-rnoweb_labels*
 citeref-contents	citeref.txt	/*citeref-contents*
 citeref-crossref_figure()	citeref.txt	/*citeref-crossref_figure()*
 citeref-crossref_table()	citeref.txt	/*citeref-crossref_table()*

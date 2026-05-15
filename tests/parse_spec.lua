@@ -725,6 +725,105 @@ describe("load_labels with tex/latex buffers", function()
 end)
 
 -- ─────────────────────────────────────────────────────────────
+-- rnoweb_labels = "tex_only"
+-- ─────────────────────────────────────────────────────────────
+
+describe("rnoweb_labels tex_only option", function()
+  local tmpdir
+  local orig_val
+
+  before_each(function()
+    tmpdir = vim.fn.tempname()
+    os.execute("mkdir -p " .. tmpdir)
+    orig_val = require("citeref.config").get().picker.rnoweb_labels
+  end)
+
+  after_each(function()
+    os.execute("rm -rf " .. tmpdir)
+    require("citeref.config").get().picker.rnoweb_labels = orig_val or "all"
+  end)
+
+  it("skips code chunks when tex_only is set and returns only LaTeX labels", function()
+    local buf = vim.api.nvim_create_buf(false, true)
+    local path = tmpdir .. "/test.rnw"
+    vim.api.nvim_buf_set_name(buf, path)
+    vim.bo[buf].filetype = "rnoweb"
+    require("citeref.config").get().picker.rnoweb_labels = "tex_only"
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, {
+      "<<my-plot>>=",
+      "plot(1:10)",
+      "@",
+      "",
+      "\\begin{figure}",
+      "\\label{rnwfig}",
+      "\\end{figure}",
+      "",
+      "<<other-chunk>>=",
+      "summary(x)",
+      "@",
+    })
+    local save_ei = vim.o.eventignore
+    vim.o.eventignore = "all"
+    vim.api.nvim_set_current_buf(buf)
+    vim.o.eventignore = save_ei
+
+    local labels = parse.load_labels("fig")
+    assert.equals(1, #labels)
+    assert.equals("rnwfig", labels[1].label)
+    assert.equals("latex", labels[1].source)
+  end)
+
+  it("includes code chunks with default 'all' setting", function()
+    local buf = vim.api.nvim_create_buf(false, true)
+    local path = tmpdir .. "/test.rnw"
+    vim.api.nvim_buf_set_name(buf, path)
+    vim.bo[buf].filetype = "rnoweb"
+    require("citeref.config").get().picker.rnoweb_labels = "all"
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, {
+      "<<my-plot>>=",
+      "plot(1:10)",
+      "@",
+      "",
+      "\\begin{figure}",
+      "\\label{rnwfig}",
+      "\\end{figure}",
+    })
+    local save_ei = vim.o.eventignore
+    vim.o.eventignore = "all"
+    vim.api.nvim_set_current_buf(buf)
+    vim.o.eventignore = save_ei
+
+    local labels = parse.load_labels("fig")
+    assert.equals(2, #labels)
+  end)
+
+  it("non-rnoweb filetypes are unaffected by tex_only", function()
+    local buf = vim.api.nvim_create_buf(false, true)
+    local path = tmpdir .. "/test.rmd"
+    vim.api.nvim_buf_set_name(buf, path)
+    vim.bo[buf].filetype = "rmd"
+    require("citeref.config").get().picker.rnoweb_labels = "tex_only"
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, {
+      "```{r my-plot}",
+      "plot(1:10)",
+      "```",
+      "",
+      "\\begin{figure}",
+      "\\label{rmdfig}",
+      "\\end{figure}",
+    })
+    local save_ei = vim.o.eventignore
+    vim.o.eventignore = "all"
+    vim.api.nvim_set_current_buf(buf)
+    vim.o.eventignore = save_ei
+
+    local labels = parse.load_labels("fig")
+    -- rmd is not rnoweb, so code chunks are still included
+    assert.equals(2, #labels)
+  end)
+end)
+
+-- ─────────────────────────────────────────────────────────────
 -- chunk parsing from rnw file
 -- ─────────────────────────────────────────────────────────────
 

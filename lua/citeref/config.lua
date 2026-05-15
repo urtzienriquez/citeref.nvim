@@ -29,6 +29,7 @@
 ---                    "telescope" | "ivy" | "ivy_split" | "select" | "sidebar" | "vscode"
 ---   minipick:        not used (mini.pick uses its own global config)
 ---@field preview_size string   (fzf / telescope only)
+---@field rnoweb_labels "all"|"tex_only"   what crossref targets to show for .Rnw buffers
 
 local M = {}
 
@@ -87,6 +88,7 @@ M.defaults = {
     -- minipick: not used (mini.pick layout is controlled via MiniPick.config)
     layout = "vertical",
     preview_size = "50%", -- fzf / telescope only
+    rnoweb_labels = "all", -- "all" or "tex_only" (only \label{} in figure/table envs)
   },
 }
 
@@ -150,6 +152,17 @@ function M.set(opts)
       vim.log.levels.WARN
     )
     M.options.default_latex_format = "cite"
+  end
+
+  if M.options.picker.rnoweb_labels ~= "all" and M.options.picker.rnoweb_labels ~= "tex_only" then
+    vim.notify(
+      "citeref: unknown picker.rnoweb_labels '"
+        .. tostring(M.options.picker.rnoweb_labels)
+        .. "'.\n"
+        .. "  Valid values: 'all', 'tex_only'.",
+      vim.log.levels.WARN
+    )
+    M.options.picker.rnoweb_labels = "all"
   end
 
   if M.options.default_myst_format and not VALID_MYST_FORMATS[M.options.default_myst_format] then
