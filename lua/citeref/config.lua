@@ -49,6 +49,7 @@ M.defaults = {
     "rmd",
     "quarto",
     "rnoweb",
+    "jnoweb",
     "pandoc",
     "tex",
     "latex",
