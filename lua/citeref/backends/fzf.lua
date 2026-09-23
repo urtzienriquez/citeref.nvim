@@ -25,13 +25,7 @@ local function next_myst_format(current_cmd)
   return MYST_FORMATS.next(current_cmd)
 end
 
---- Build the insertion text for a latex format.
----@param keys string[]
----@param cmd string  e.g. "citep"
----@return string
-local function format_latex(keys, cmd)
-  return "\\" .. cmd .. "{" .. table.concat(keys, ", ") .. "}"
-end
+local format_latex = LATEX_FORMATS.format
 
 -- ─────────────────────────────────────────────────────────────
 -- Shared previewer factory
@@ -180,7 +174,15 @@ function M.pick_citation(format, entries, ctx, cmd)
     table.sort(keys)
 
     local text
-    if format == "latex" then
+    if format == "latex" and ctx.latex_append then
+      local added = util.append_to_latex_cite(ctx, keys)
+      if added then
+        vim.defer_fn(function()
+          vim.notify("citeref: added " .. added, vim.log.levels.INFO)
+        end, 100)
+      end
+      return
+    elseif format == "latex" then
       text = format_latex(keys, latex_fmt.cmd)
     elseif format == "myst" then
       prompt_wrappers(function(prefix, suffix)

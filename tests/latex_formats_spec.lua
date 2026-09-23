@@ -61,4 +61,86 @@ describe("latex_formats", function()
       seen[f.cmd] = true
     end
   end)
+
+  describe("format", function()
+    it("joins keys with ', '", function()
+      assert.equals("\\citep{a, b}", formats.format({ "a", "b" }, "citep"))
+    end)
+  end)
+
+  describe("enclosing_cite", function()
+    local line = "See \\citep{a, b} and \\ref{x} or \\textcite{c}."
+    --            0123 4567890123456789
+
+    it("finds the cite when the cursor is inside the keys", function()
+      local c = formats.enclosing_cite(line, 12)
+      assert.equals("citep", c.cmd)
+      assert.same({ "a", "b" }, c.keys)
+      assert.equals(4, c.start_col)
+      assert.equals(10, c.open_col)
+      assert.equals(15, c.close_col)
+    end)
+
+    it("matches on the backslash and on the closing brace in normal mode", function()
+      assert.equals("citep", formats.enclosing_cite(line, 4).cmd)
+      assert.equals("citep", formats.enclosing_cite(line, 15).cmd)
+    end)
+
+    it("does not match before the backslash in insert mode", function()
+      assert.is_nil(formats.enclosing_cite(line, 4, true))
+      assert.equals("citep", formats.enclosing_cite(line, 15, true).cmd)
+    end)
+
+    it("returns nil outside any cite and for non-cite commands", function()
+      assert.is_nil(formats.enclosing_cite(line, 1))
+      assert.is_nil(formats.enclosing_cite(line, 17))
+      assert.is_nil(formats.enclosing_cite(line, 25))
+    end)
+
+    it("picks the right cite when there are several on a line", function()
+      local c = formats.enclosing_cite(line, #line - 3)
+      assert.equals("textcite", c.cmd)
+      assert.same({ "c" }, c.keys)
+    end)
+
+    it("skips optional [...] arguments", function()
+      local c = formats.enclosing_cite("\\parencite[see][p.~5]{a}", 22)
+      assert.equals("parencite", c.cmd)
+      assert.same({ "a" }, c.keys)
+    end)
+
+    it("handles empty braces", function()
+      local c = formats.enclosing_cite("\\cite{}", 6)
+      assert.same({}, c.keys)
+      assert.equals(6, c.close_col)
+    end)
+
+    it("handles an unclosed brace", function()
+      local c = formats.enclosing_cite("text \\cite{a, ", 14, true)
+      assert.equals("cite", c.cmd)
+      assert.is_nil(c.close_col)
+      assert.same({ "a" }, c.keys)
+    end)
+  end)
+
+  describe("append_keys", function()
+    it("prefixes ', ' when keys exist", function()
+      assert.equals(", c, d", formats.append_keys("a, b", { "c", "d" }))
+    end)
+
+    it("adds no separator to empty braces", function()
+      assert.equals("c", formats.append_keys("", { "c" }))
+      assert.equals("c", formats.append_keys(" ", { "c" }))
+    end)
+
+    it("respects a trailing comma", function()
+      assert.equals(" c", formats.append_keys("a,", { "c" }))
+      assert.equals("c", formats.append_keys("a, ", { "c" }))
+    end)
+
+    it("skips keys already present", function()
+      assert.equals(", c", formats.append_keys("a, b", { "b", "c" }))
+      assert.is_nil(formats.append_keys("a, b", { "a" }))
+    end)
+  end)
 end)

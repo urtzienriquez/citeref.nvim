@@ -315,6 +315,9 @@ cite_latex()~
   Picker: shows a |vim.ui.select| dialog to choose a format first, then
   opens the picker. Completion: shows completion menu.
   Press <C-l> inside the picker to cycle formats.
+  If the cursor is inside an existing cite command (e.g. \citep{a, b}),
+  the format prompt is skipped and the picked keys are appended to it
+  (\citep{a, b, c}). Keys already present are not duplicated.
 
                                                *citeref-cite_myst()*
 cite_myst()~

@@ -1,4 +1,5 @@
 --- citeref.nvim – mini.pick backend
+local util = require("citeref.util")
 local parse = require("citeref.parse")
 local MYST_FORMATS = require("citeref.myst_formats")
 
@@ -23,9 +24,7 @@ local function next_myst_format(current_cmd)
   return MYST_FORMATS.next(current_cmd)
 end
 
-local function format_latex(keys, cmd)
-  return "\\" .. cmd .. "{" .. table.concat(keys, ", ") .. "}"
-end
+local format_latex = LATEX_FORMATS.format
 
 -- ─────────────────────────────────────────────────────────────
 -- Shared helpers
@@ -236,7 +235,14 @@ function M.pick_citation(format, entries, ctx, cmd)
           return
         end
         table.sort(keys)
-        if format == "myst" then
+        if format == "latex" and ctx.latex_append then
+          vim.schedule(function()
+            local added = util.append_to_latex_cite(ctx, keys)
+            if added then
+              vim.notify("citeref: added " .. added, vim.log.levels.INFO)
+            end
+          end)
+        elseif format == "myst" then
           prompt_wrappers(function(prefix, suffix)
             insert_after_pick(ctx, MYST_FORMATS.format(keys, myst_fmt.cmd, prefix, suffix))
           end)

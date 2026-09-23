@@ -269,6 +269,8 @@ The first option is always **default** — selecting it (or pressing `<Esc>`) op
 
 Selecting any other format opens the picker with that format active.
 
+If the cursor is already inside a cite command (e.g. `\citep{a, b}`), the format prompt is skipped and the picked keys are appended to the existing list: `\citep{a, b, c}`. Keys that are already cited are not added twice.
+
 ### Format cycling inside the picker
 
 Once the picker is open, press **`<C-l>`** to cycle through all available formats. The current format is shown in the picker title; a notification confirms each cycle.

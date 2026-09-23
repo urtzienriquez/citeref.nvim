@@ -48,6 +48,16 @@ function M.cite_latex()
     local cfg = require("citeref.config").get()
     local LATEX_FORMATS = require("citeref.latex_formats")
 
+    -- Cursor inside an existing \cite{...}: append keys to it instead of
+    -- inserting a new command, so no format choice is needed.
+    local ctx = require("citeref.util").save_context()
+    local cite = LATEX_FORMATS.enclosing_cite(vim.api.nvim_get_current_line(), ctx.col, ctx.was_insert_mode)
+    if cite then
+      ctx.latex_append = true
+      registry.call("pick_citation", "latex", entries, ctx, cite.cmd)
+      return
+    end
+
     local default_label = "\\cite{}"
     for _, f in ipairs(LATEX_FORMATS) do
       if f.cmd == cfg.default_latex_format then
@@ -62,7 +72,6 @@ function M.cite_latex()
       options[#options + 1] = { cmd = f.cmd, label = f.label }
     end
 
-    local ctx = require("citeref.util").save_context()
     vim.ui.select(options, {
       prompt = "LaTeX format: ",
       format_item = function(item)
