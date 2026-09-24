@@ -20,11 +20,18 @@ local M = {
   { cmd = "nocite", label = "\\nocite{}" },
 }
 
+--- Join citation keys the way citeref writes them: comma-separated, no spaces.
+---@param keys string[]
+---@return string
+function M.join(keys)
+  return table.concat(keys, ",")
+end
+
 ---@param keys string[]
 ---@param cmd string  e.g. "citep"
 ---@return string
 function M.format(keys, cmd)
-  return "\\" .. cmd .. "{" .. table.concat(keys, ", ") .. "}"
+  return "\\" .. cmd .. "{" .. M.join(keys) .. "}"
 end
 
 ---@param inner string  text between the opening brace and the insertion point
@@ -107,34 +114,43 @@ function M.enclosing_cite(line, col, is_insert)
   end
 end
 
---- Build the text to insert (at the end of `inner`) that appends `new_keys`
---- to an existing key list, skipping keys already present.
----@param inner string     current text between "{" and the insertion point
+--- Append `new_keys` to `existing`, skipping keys already present.
+---@param existing string[]
 ---@param new_keys string[]
----@return string|nil      nil when every key is already cited
-function M.append_keys(inner, new_keys)
+---@return string[]|nil  nil when every key is already cited
+function M.merge_keys(existing, new_keys)
+  local out = vim.deepcopy(existing)
   local seen = {}
-  for _, k in ipairs(split_keys(inner)) do
+  for _, k in ipairs(out) do
     seen[k] = true
   end
-  local add = {}
+  local added = false
   for _, k in ipairs(new_keys) do
     if not seen[k] then
       seen[k] = true
-      add[#add + 1] = k
+      out[#out + 1] = k
+      added = true
     end
   end
-  if #add == 0 then
-    return nil
+  return added and out or nil
+end
+
+--- Replace `old_key` with `new_key`, dropping `new_key` elsewhere in the
+--- list so it isn't cited twice.
+---@param keys string[]
+---@param old_key string
+---@param new_key string
+---@return string[]
+function M.replace_key(keys, old_key, new_key)
+  local out = {}
+  for _, k in ipairs(keys) do
+    if k == old_key then
+      out[#out + 1] = new_key
+    elseif k ~= new_key then
+      out[#out + 1] = k
+    end
   end
-  local text = table.concat(add, ", ")
-  local trimmed = inner:gsub("%s+$", "")
-  if trimmed == "" then
-    return text
-  elseif trimmed:sub(-1) == "," then
-    return (trimmed == inner) and (" " .. text) or text
-  end
-  return ", " .. text
+  return out
 end
 
 return M

@@ -315,9 +315,11 @@ cite_latex()~
   Picker: shows a |vim.ui.select| dialog to choose a format first, then
   opens the picker. Completion: shows completion menu.
   Press <C-l> inside the picker to cycle formats.
-  If the cursor is inside an existing cite command (e.g. \citep{a, b}),
+  If the cursor is inside an existing cite command (e.g. \citep{a,b}),
   the format prompt is skipped and the picked keys are appended to it
-  (\citep{a, b, c}). Keys already present are not duplicated.
+  (\citep{a,b,c}). Keys already present are not duplicated.
+  LaTeX key lists are always written without spaces (\cite{a,b}); when
+  appending or replacing, any spaces already in the list are removed.
 
                                                *citeref-cite_myst()*
 cite_myst()~
@@ -616,7 +618,7 @@ Shared parsers~
 
   For LaTeX citations, build the string directly:
 >lua
-    "\\" .. cmd .. "{" .. table.concat(keys, ", ") .. "}"
+    "\\" .. cmd .. "{" .. table.concat(keys, ",") .. "}"
 <
 
   The available LaTeX commands are defined in |citeref-latex-format-list|.

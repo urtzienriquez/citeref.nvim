@@ -77,10 +77,10 @@ function M.insert_at_context(ctx, text)
 end
 
 --- Append keys to the LaTeX cite command enclosing the saved cursor position,
---- e.g. \citep{a, b} → \citep{a, b, c}.
+--- rewriting its key list without spaces, e.g. \citep{a, b} → \citep{a,b,c}.
 ---@param ctx table  context from save_context()
 ---@param keys string[]
----@return string|nil inserted text, nil if nothing was inserted
+---@return string|nil new key list, nil if nothing was inserted
 function M.append_to_latex_cite(ctx, keys)
   if not ctx or not vim.api.nvim_buf_is_valid(ctx.buf) then
     return nil
@@ -103,23 +103,32 @@ function M.append_to_latex_cite(ctx, keys)
     col = ctx.was_insert_mode and ctx.col or ctx.col + 1
     col = math.max(col, cite.open_col + 1)
   end
-  local inner = line:sub(cite.open_col + 2, col)
-  local text = LATEX_FORMATS.append_keys(inner, keys)
-  if not text then
+  local existing = cite.keys
+  if not cite.close_col then
+    existing = vim.split(line:sub(cite.open_col + 2, col), ",", { trimempty = true })
+    existing = vim.tbl_filter(function(k)
+      return k ~= ""
+    end, vim.tbl_map(vim.trim, existing))
+  end
+  local merged = LATEX_FORMATS.merge_keys(existing, keys)
+  if not merged then
     vim.notify("citeref: already cited", vim.log.levels.INFO)
     return nil
   end
+  local text = LATEX_FORMATS.join(merged)
   local inserted = cite.close_col and text or (text .. "}")
 
-  local ok = pcall(vim.api.nvim_buf_set_text, ctx.buf, row - 1, col, row - 1, col, { inserted })
+  -- Replace everything between "{" and "}" (or the cursor, if unclosed)
+  local start = cite.open_col + 1
+  local ok = pcall(vim.api.nvim_buf_set_text, ctx.buf, row - 1, start, row - 1, col, { inserted })
   if not ok then
     return nil
   end
 
-  -- Leave the cursor right after the appended keys (before "}")
-  M.set_cursor_after(ctx.buf, ctx.win, row, col, text)
+  -- Leave the cursor right after the last key (before "}")
+  M.set_cursor_after(ctx.buf, ctx.win, row, start, text)
   if ctx.was_insert_mode then
-    M.reenter_insert(ctx.buf, ctx.win, row, col, #text)
+    M.reenter_insert(ctx.buf, ctx.win, row, start, #text)
   end
   return text
 end

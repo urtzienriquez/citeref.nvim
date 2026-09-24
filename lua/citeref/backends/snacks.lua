@@ -284,15 +284,18 @@ function M.replace(entries, info)
         return
       end
         local replacement
+        local s_col, e_col = info.start_col, info.end_col + 1
         if info.style == "latex" then
-          replacement = e.key
+          -- Rewrite the whole key list so it has no spaces
+          replacement = LATEX_FORMATS.join(LATEX_FORMATS.replace_key(info.all_keys, info.key, e.key))
+          s_col, e_col = info.brace_open + 1, info.brace_close
         elseif info.style == "myst" then
           local keys = MYST_FORMATS.replace_key(info.all_keys or { info.key }, info.key, e.key)
           replacement = MYST_FORMATS.format(keys, info.cmd or "cite:p", info.prefix, info.suffix)
         else
           replacement = "@" .. e.key
         end
-        local ok, err = pcall(vim.api.nvim_buf_set_text, buf, row - 1, info.start_col, row - 1, info.end_col + 1, { replacement })
+        local ok, err = pcall(vim.api.nvim_buf_set_text, buf, row - 1, s_col, row - 1, e_col, { replacement })
       vim.defer_fn(function()
         if ok then
           vim.notify(string.format("citeref: %s → %s", info.key, e.key), vim.log.levels.INFO)

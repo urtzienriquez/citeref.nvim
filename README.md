@@ -269,7 +269,9 @@ The first option is always **default** — selecting it (or pressing `<Esc>`) op
 
 Selecting any other format opens the picker with that format active.
 
-If the cursor is already inside a cite command (e.g. `\citep{a, b}`), the format prompt is skipped and the picked keys are appended to the existing list: `\citep{a, b, c}`. Keys that are already cited are not added twice.
+If the cursor is already inside a cite command (e.g. `\citep{a,b}`), the format prompt is skipped and the picked keys are appended to the existing list: `\citep{a,b,c}`. Keys that are already cited are not added twice.
+
+LaTeX key lists are always written without spaces (`\cite{a,b}`). When appending to or replacing a key in an existing list, any spaces already in it are removed.
 
 ### Format cycling inside the picker
 
@@ -533,7 +535,7 @@ parse.format_crossref(ref_type, label, bufnr) -- filetype-aware: "@label" or "\@
 parse.citation_under_cursor()               -- detect citation at cursor → info table or nil
 ```
 
-Note: for LaTeX citations, use `"\\cite{" .. cmd .. "}{" .. table.concat(keys, ", ") .. "}"` directly — `format_citation` is markdown-only. The available commands are defined in `lua/citeref/latex_formats.lua`.
+Note: for LaTeX citations, use `"\\" .. cmd .. "{" .. table.concat(keys, ",") .. "}"` directly — `format_citation` is markdown-only. The available commands are defined in `lua/citeref/latex_formats.lua`.
 
 ---
 
