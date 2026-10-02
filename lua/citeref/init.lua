@@ -285,26 +285,34 @@ end
 local attached = {}
 local sync_group = vim.api.nvim_create_augroup("citeref_sync", { clear = true })
 
---- Keep the written .bib up to date when the buffer is saved
---- (citeref.bibwrite is loaded on the first save, not at attach).
+--- Sync the written .bib for `buf`'s folder, after the current event.
+local function run_sync(buf)
+  vim.schedule(function()
+    local wcfg = require("citeref.config").get().write_bib or {}
+    if not wcfg.sync or not vim.api.nvim_buf_is_valid(buf) then
+      return
+    end
+    local ok, err = pcall(require("citeref.bibwrite").sync, buf)
+    if not ok then
+      vim.notify("citeref: .bib sync failed – " .. tostring(err), vim.log.levels.WARN)
+    end
+  end)
+end
+
+--- Keep the written .bib up to date when the buffer is opened and saved.
 local function set_sync(buf)
   vim.api.nvim_clear_autocmds({ group = sync_group, buffer = buf })
   vim.api.nvim_create_autocmd("BufWritePost", {
     group = sync_group,
     buffer = buf,
     callback = function(ev)
-      vim.schedule(function()
-        local wcfg = require("citeref.config").get().write_bib or {}
-        if not wcfg.sync or not vim.api.nvim_buf_is_valid(ev.buf) then
-          return
-        end
-        local ok, err = pcall(require("citeref.bibwrite").sync, ev.buf)
-        if not ok then
-          vim.notify("citeref: .bib sync failed – " .. tostring(err), vim.log.levels.WARN)
-        end
-      end)
+      run_sync(ev.buf)
     end,
   })
+  local name = vim.api.nvim_buf_get_name(buf)
+  if name ~= "" and vim.uv.fs_stat(name) then
+    run_sync(buf)
+  end
 end
 
 function M.attach()
