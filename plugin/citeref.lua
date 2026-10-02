@@ -4,6 +4,10 @@ if vim.g.loaded_citeref == 1 then
 end
 vim.g.loaded_citeref = 1
 
+vim.api.nvim_create_user_command("CiterefWriteBib", function(cmd)
+  require("citeref").write_bib({ output = cmd.args ~= "" and cmd.args or nil })
+end, { nargs = "?", complete = "file", desc = "citeref: write a .bib with the cited entries" })
+
 vim.schedule(function()
   local group = vim.api.nvim_create_augroup("citeref", { clear = true })
 

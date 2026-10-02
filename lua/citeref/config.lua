@@ -7,6 +7,12 @@
 ---@field picker CiterefPickerConfig
 ---@field default_latex_format string  Default LaTeX cite command (e.g. "cite", "citep", "citet")
 ---@field default_myst_format string   Default MyST cite role (e.g. "cite:p", "cite:t")
+---@field write_bib CiterefWriteBibConfig
+
+---@class CiterefWriteBibConfig
+---@field output  string    file name (relative to the documents) or absolute path
+---@field exclude string[]  Lua patterns for document names to skip
+---@field sync    boolean   update the file on save, in folders where it already exists
 
 ---@class CiterefKeymapConfig
 ---@field enabled           boolean
@@ -80,6 +86,13 @@ M.defaults = {
     crossref_figure_n = "<leader>af",
     crossref_table_i = "<C-a>t",
     crossref_table_n = "<leader>at",
+  },
+
+  -- write_bib(): .bib with only the cited entries, written next to the documents
+  write_bib = {
+    output = "references.bib",
+    exclude = {}, -- Lua patterns for document names to skip, e.g. { "_diff%.tex$" }
+    sync = true, -- update it on save, in folders where it already exists
   },
 
   picker = {

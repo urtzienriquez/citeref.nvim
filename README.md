@@ -211,6 +211,13 @@ require("citeref").setup({
     preview_size  = "50%",
     rnoweb_labels = "all",
   },
+
+  -- :CiterefWriteBib / write_bib(), see "Writing a .bib with the cited entries".
+  write_bib = {
+    output  = "references.bib",  -- relative to the documents, or an absolute path
+    exclude = {},                -- Lua patterns for document names to skip
+    sync    = true,              -- update it on save, in folders where it already exists
+  },
 })
 ```
 
@@ -329,7 +336,7 @@ Completion backends (`blink`, `cmp`) trigger on `@` for markdown and `\cite{` fo
 
 Without `setup()`, citeref scans only `*.bib` files in the current working directory. If none are found it warns once when you trigger a citation.
 
-With `setup({ bib_files = { ... } })`, the configured files are merged with any cwd `*.bib` files (duplicates removed). Missing configured files produce a one-time warning.
+With `setup({ bib_files = { ... } })`, the configured files are merged with any cwd `*.bib` files (duplicates removed). Missing configured files produce a one-time warning. When a key appears in more than one file, the entry from the configured files wins, so a local copy (e.g. one written by [`write_bib()`](#writing-a-bib-with-the-cited-entries)) never shows up twice.
 
 ```lua
 -- Static global library + any project-local .bib automatically included
@@ -346,6 +353,48 @@ require("citeref").setup({
   end,
 })
 ```
+
+---
+
+## Writing a .bib with the cited entries
+
+`:CiterefWriteBib` (or `require("citeref").write_bib()`) writes `references.bib` next to the current buffer, with only the entries cited in the documents of that folder. Use it to ship a self-contained bibliography with a manuscript instead of your whole library.
+
+- **Documents scanned:** every `.tex`, `.rnw`, `.jnw`, `.md`, `.rmd` and `.qmd` in the folder. Open buffers are read with their unsaved changes. A `.tex` is skipped when a `.rnw`/`.rmd`/`.qmd` of the same name exists, since it is knitted output.
+- **Citations found:** any LaTeX command whose name contains `cite` (including custom ones and multicite commands like `\textcites{a}{b}`), pandoc `@key` / `[@a; @b]` / `@{key}`, and MyST `` {cite:p}`key` ``. LaTeX comments, code chunks, fenced code and inline code are ignored.
+- **Entries copied:** verbatim from the configured `bib_files` (cwd `*.bib` files are used only when none are configured), plus any entries they point to via `crossref`, `xref`, `xdata` or `entryset`. Entries are sorted by key, and the file is not rewritten when nothing changed.
+- **Missing keys:** cited keys found in no `.bib` (neither the library nor a local file such as `packages.bib`) are reported in a warning.
+- **`\nocite{*}` / `@*`:** cite the whole library, so nothing is written.
+
+```lua
+require("citeref").setup({
+  backend   = "fzf",
+  bib_files = { "~/Documents/zotero.bib" },
+  write_bib = {
+    output  = "references.bib",   -- relative to the documents, or an absolute path
+    exclude = { "_diff%.tex$" },  -- Lua patterns for document names to skip
+    sync    = true,               -- keep it up to date on save (default)
+  },
+})
+
+-- per call: dir, output, sources, exclude, silent
+local res = require("citeref").write_bib({ output = "refs.bib" })
+-- res = { path = ".../refs.bib", written = 90, missing = {}, changed = true }
+```
+
+It does not need the editor UI, so it also runs from a shell or a Makefile:
+
+```sh
+nvim --headless -c 'lua require("citeref").write_bib()' -c q
+```
+
+Citations produced by code (e.g. an R chunk that prints `\cite{...}`) are not in the source and are not found.
+
+### Keeping it in sync
+
+With `write_bib.sync = true` (the default), saving a document updates the file, but **only in folders where it already exists**: run `:CiterefWriteBib` once to start syncing a project, delete the file to stop. Other projects are never touched.
+
+Saving is effectively free. Each document's keys are cached and only the changed ones are re-scanned, and when neither the cited keys nor the `.bib` files changed (most saves), nothing else happens (~0.2 ms on a 90-reference manuscript with a 1,500-entry library). When the library itself changes, e.g. Zotero re-exports it after you fix an entry, the next save brings the corrected entry in. Notifications appear only when the file actually changes, or when the set of missing keys changes.
 
 ---
 
@@ -548,6 +597,7 @@ lua/citeref/
   parse.lua             Bib parser, chunk parser (R/Python/Julia), shared display helpers
   util.lua              Cursor context save/restore, text insertion
   latex_formats.lua     LaTeX citation command definitions (single source of truth)
+  bibwrite.lua          write_bib(): cited keys, verbatim .bib entries
   backends/
     init.lua            Backend registry and lazy loader
     fzf.lua             fzf-lua picker (citations, crossrefs, replace)
@@ -557,7 +607,7 @@ lua/citeref/
     blink.lua           blink.cmp completion source
     cmp.lua             nvim-cmp completion source
 plugin/
-  citeref.lua           FileType autocommand (startup entry point)
+  citeref.lua           FileType autocommand (startup entry point), :CiterefWriteBib
 ```
 
 ---
@@ -584,6 +634,7 @@ citeref.crossref_figure()      -- insert figure crossref (format depends on file
 citeref.crossref_table()       -- insert table crossref  (format depends on filetype)
 citeref.set_latex_format(cmd)  -- change default LaTeX format on the fly (e.g. "citep")
 citeref.set_myst_format(cmd)   -- change default MyST format on the fly  (e.g. "cite:t")
+citeref.write_bib(opts)        -- write a .bib with only the cited entries (see above)
 
 citeref.register_backend(name, backend)  -- register a custom backend
 

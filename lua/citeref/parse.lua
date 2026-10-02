@@ -166,6 +166,8 @@ function M.parse_bib(file_paths)
 end
 
 --- Convenience: resolve + parse in one call.
+--- Duplicate keys are dropped; configured bib_files come first, so the
+--- global library wins over local copies (e.g. a file from write_bib()).
 ---@return CiterefEntry[]
 function M.load_entries()
   local files = M.resolve_bib_files()
@@ -173,8 +175,14 @@ function M.load_entries()
     return {}
   end
   local entries = {}
+  local seen = {}
   for _, f in ipairs(files) do
-    vim.list_extend(entries, M.parse_bib(f))
+    for _, e in ipairs(M.parse_bib(f)) do
+      if not seen[e.key] then
+        seen[e.key] = true
+        entries[#entries + 1] = e
+      end
+    end
   end
   if #entries == 0 then
     vim.notify("citeref: bib files found but no entries could be parsed", vim.log.levels.WARN)

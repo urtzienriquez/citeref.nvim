@@ -197,6 +197,18 @@ function M.crossref_table()
 end
 
 -- ─────────────────────────────────────────────────────────────
+-- Write a .bib with the cited entries
+-- ─────────────────────────────────────────────────────────────
+
+--- Write a .bib file with only the entries cited in the documents next to
+--- the current buffer. See citeref.bibwrite for the options.
+---@param opts? CiterefWriteBibOpts
+---@return CiterefWriteBibResult|nil
+function M.write_bib(opts)
+  return require("citeref.bibwrite").write_bib(opts)
+end
+
+-- ─────────────────────────────────────────────────────────────
 -- Register a custom backend
 -- ─────────────────────────────────────────────────────────────
 
@@ -271,6 +283,29 @@ end
 -- ─────────────────────────────────────────────────────────────
 
 local attached = {}
+local sync_group = vim.api.nvim_create_augroup("citeref_sync", { clear = true })
+
+--- Keep the written .bib up to date when the buffer is saved
+--- (citeref.bibwrite is loaded on the first save, not at attach).
+local function set_sync(buf)
+  vim.api.nvim_clear_autocmds({ group = sync_group, buffer = buf })
+  vim.api.nvim_create_autocmd("BufWritePost", {
+    group = sync_group,
+    buffer = buf,
+    callback = function(ev)
+      vim.schedule(function()
+        local wcfg = require("citeref.config").get().write_bib or {}
+        if not wcfg.sync or not vim.api.nvim_buf_is_valid(ev.buf) then
+          return
+        end
+        local ok, err = pcall(require("citeref.bibwrite").sync, ev.buf)
+        if not ok then
+          vim.notify("citeref: .bib sync failed – " .. tostring(err), vim.log.levels.WARN)
+        end
+      end)
+    end,
+  })
+end
 
 function M.attach()
   local buf = vim.api.nvim_get_current_buf()
@@ -279,6 +314,7 @@ function M.attach()
   end
   attached[buf] = true
   set_keymaps()
+  set_sync(buf)
   vim.api.nvim_create_autocmd("BufDelete", {
     buffer = buf,
     once = true,

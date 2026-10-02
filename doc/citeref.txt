@@ -379,6 +379,13 @@ debug()~
   Print buffer number, filetype, attachment status, backend, and all
   active citeref buffer keymaps.
 
+                                       *citeref-write_bib()* *:CiterefWriteBib*
+write_bib({opts})~
+:CiterefWriteBib [file]~
+  Write a .bib with only the entries cited in the documents next to the
+  current buffer. See |citeref-write-bib|. Returns
+  `{ path, written, missing, changed }`, or nil when nothing was written.
+
 ==============================================================================
 CITATION FORMAT SELECTION                        *citeref-citation-formats*
 
@@ -469,7 +476,8 @@ directory. If none are found, it warns once when you trigger a citation.
 
 With setup({ bib_files = { ... } }), the configured files are merged with
 any cwd *.bib files (duplicates removed). Missing configured files produce
-a one-time warning.
+a one-time warning. When a key appears in more than one file, the entry
+from the configured files wins.
 
 Static configuration:
 >lua
@@ -488,6 +496,45 @@ Dynamic configuration (re-evaluated on every picker open):
       end,
     })
 <
+
+                                                      *citeref-write-bib*
+Writing a .bib with the cited entries~
+  |:CiterefWriteBib| writes references.bib next to the current buffer with
+  only the entries cited in the .tex, .rnw, .jnw, .md, .rmd and .qmd files
+  of that folder (open buffers are read with unsaved changes; a .tex knitted
+  from a .rnw/.rmd/.qmd of the same name is skipped).
+
+  Citations: any LaTeX command whose name contains "cite" (multicite
+  commands included), pandoc @key / @{key}, MyST {cite:p}`key`. Comments,
+  code chunks and inline code are ignored.
+
+  Entries are copied verbatim from the configured bib_files (cwd *.bib only
+  when none are configured), with their crossref/xref/xdata/entryset
+  targets, sorted by key. The file is not rewritten when nothing changed.
+  Cited keys found in no .bib are reported. \nocite{*} or @* writes
+  nothing.
+
+  Options (setup() `write_bib`, or per call):
+    output   file name relative to the documents, or absolute path
+             (default "references.bib")
+    exclude  Lua patterns for document names to skip, e.g. { "_diff%.tex$" }
+    sync     setup() only, default true (see below)
+  Per call only: dir, sources, silent.
+
+  From a shell:
+>sh
+    nvim --headless -c 'lua require("citeref").write_bib()' -c q
+<
+                                                 *citeref-write-bib-sync*
+  With `write_bib.sync = true` (the default), saving a document updates the
+  file, but only in folders where it already exists: run |:CiterefWriteBib|
+  once to start syncing a project, delete the file to stop.
+
+  Each document's keys are cached and only changed documents are
+  re-scanned. When neither the cited keys nor the .bib files changed, the
+  save does nothing more. A changed library (e.g. re-exported by Zotero) is
+  picked up on the next save. Notifications appear only when the file
+  changes or the set of missing keys changes.
 
 ==============================================================================
 CROSS-REFERENCES                                      *citeref-crossrefs*

@@ -1,3 +1,4 @@
+:CiterefWriteBib	citeref.txt	/*:CiterefWriteBib*
 citeref	citeref.txt	/*citeref*
 citeref-api	citeref.txt	/*citeref-api*
 citeref-architecture	citeref.txt	/*citeref-architecture*
@@ -30,5 +31,8 @@ citeref-set_myst_format()	citeref.txt	/*citeref-set_myst_format()*
 citeref-setup()	citeref.txt	/*citeref-setup()*
 citeref-setup-example	citeref.txt	/*citeref-setup-example*
 citeref-without-setup	citeref.txt	/*citeref-without-setup*
+citeref-write-bib	citeref.txt	/*citeref-write-bib*
+citeref-write-bib-sync	citeref.txt	/*citeref-write-bib-sync*
+citeref-write_bib()	citeref.txt	/*citeref-write_bib()*
 citeref.nvim	citeref.txt	/*citeref.nvim*
 doc/citeref.txt	citeref.txt	/*doc\/citeref.txt*
