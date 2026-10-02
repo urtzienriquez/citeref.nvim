@@ -168,88 +168,11 @@ function M.markdown_keys(lines, add)
 end
 
 -- ─────────────────────────────────────────────────────────────
--- Bibliography files a document uses
--- ─────────────────────────────────────────────────────────────
-
---- Files given to \addbibresource / \addglobalbib / \bibliography.
----@param lines string[]
----@param add fun(file: string)
-function M.latex_bibs(lines, add)
-  for _, line in ipairs(lines) do
-    line = strip_latex_comment(line)
-    local pos = 1
-    while true do
-      local s, e, cmd = line:find("\\(%a+)", pos)
-      if not s then
-        break
-      end
-      pos = e + 1
-      local is_add = cmd:match("^add%a*bib%a*$")
-      if is_add or cmd == "bibliography" then
-        local rest = line:sub(e + 1):gsub("^%s*%b[]", "")
-        local arg = rest:match("^%s*(%b{})")
-        if arg then
-          for f in arg:sub(2, -2):gmatch("[^,]+") do
-            f = vim.trim(f)
-            if is_add then
-              add(f)
-            elseif f ~= "" then
-              add(f:match("%.bib$") and f or (f .. ".bib"))
-            end
-          end
-        end
-      end
-    end
-  end
-end
-
---- Files given to `bibliography:` in a YAML front matter (scalar, [list] or - items).
----@param lines string[]
----@param add fun(file: string)
-function M.yaml_bibs(lines, add)
-  if not (lines[1] and lines[1]:match("^%-%-%-%s*$")) then
-    return
-  end
-  local function add_value(v)
-    v = vim.trim(v):gsub("^[\"']", ""):gsub("[\"']$", "")
-    if v ~= "" then
-      add(v)
-    end
-  end
-  local in_list = false
-  for i = 2, #lines do
-    local line = lines[i]
-    if line:match("^%-%-%-%s*$") or line:match("^%.%.%.%s*$") then
-      return
-    end
-    local value = line:match("^bibliography:%s*(.-)%s*$")
-    if value then
-      in_list = value == ""
-      local inner = value:match("^%[(.*)%]$")
-      if inner then
-        for v in inner:gmatch("[^,]+") do
-          add_value(v)
-        end
-      elseif value ~= "" then
-        add_value(value)
-      end
-    elseif in_list then
-      local item = line:match("^%s+%-%s*(.-)%s*$")
-      if item then
-        add_value(item)
-      elseif not line:match("^%s*$") then
-        in_list = false
-      end
-    end
-  end
-end
-
--- ─────────────────────────────────────────────────────────────
 -- Caches: documents and .bib files are re-read only when they change
 -- ─────────────────────────────────────────────────────────────
 
 M.stats = { doc_scans = 0, bib_reads = 0 }
-local doc_cache = {} -- path → { sig, keys, nocite_all, bibs }
+local doc_cache = {} -- path → { sig, keys, nocite_all }
 local bib_cache = {} -- path → { sig, entries, extras }
 
 ---@param path string
@@ -262,8 +185,7 @@ local function file_sig(path)
   return st.mtime.sec .. "." .. st.mtime.nsec .. "." .. st.size
 end
 
---- Keys cited in one document, and the .bib files it uses (absolute paths).
---- Re-scanned only when the document changed.
+--- Keys cited in one document, re-scanned only when it changed.
 local function scan_doc(path, ext, bufs)
   local sig = bufs[path] and ("b" .. vim.api.nvim_buf_get_changedtick(bufs[path])) or file_sig(path)
   local hit = doc_cache[path]
@@ -271,7 +193,7 @@ local function scan_doc(path, ext, bufs)
     return hit
   end
   M.stats.doc_scans = M.stats.doc_scans + 1
-  local doc = { sig = sig, keys = {}, nocite_all = false, bibs = {} }
+  local doc = { sig = sig, keys = {}, nocite_all = false }
   local function add(k)
     if k == "*" then
       doc.nocite_all = true
@@ -279,18 +201,11 @@ local function scan_doc(path, ext, bufs)
       doc.keys[k] = true
     end
   end
-  local doc_dir = vim.fn.fnamemodify(path, ":h")
-  local function add_bib(f)
-    f = vim.fn.expand(f)
-    doc.bibs[abspath(f:sub(1, 1) == "/" and f or (doc_dir .. "/" .. f))] = true
-  end
   local lines = read_lines(path, bufs)
   if LATEX_EXT[ext] then
     M.latex_keys(lines, add)
-    M.latex_bibs(lines, add_bib)
   elseif MD_EXT[ext] then
     M.markdown_keys(lines, add)
-    M.yaml_bibs(lines, add_bib)
   end
   doc_cache[path] = doc
   return doc
@@ -318,7 +233,6 @@ end
 ---@param exclude? string[]  Lua patterns matched against file names
 ---@return table<string, boolean> keys
 ---@return boolean nocite_all  true when \nocite{*} or @* is used
----@return table<string, boolean> bibs  absolute paths of the .bib files the documents use
 function M.cited_keys(dir, exclude)
   exclude = exclude or {}
   local files = vim.fn.globpath(dir, DOC_GLOB, false, true)
@@ -329,7 +243,7 @@ function M.cited_keys(dir, exclude)
     end
   end
 
-  local keys, nocite_all, bibs = {}, false, {}
+  local keys, nocite_all = {}, false
   local bufs = loaded_buffers()
   for _, f in ipairs(files) do
     local ext = vim.fn.fnamemodify(f, ":e"):lower()
@@ -339,13 +253,10 @@ function M.cited_keys(dir, exclude)
       for k in pairs(doc.keys) do
         keys[k] = true
       end
-      for b in pairs(doc.bibs) do
-        bibs[b] = true
-      end
       nocite_all = nocite_all or doc.nocite_all
     end
   end
-  return keys, nocite_all, bibs
+  return keys, nocite_all
 end
 
 -- ─────────────────────────────────────────────────────────────
@@ -354,9 +265,10 @@ end
 
 M.MARKER = "% generated by citeref.nvim"
 
---- Who owns the output file.
+--- Who owns a .bib file. Only "ours" (first line is M.MARKER) is synced;
+--- write_bib() may write "absent" and "empty" files, and "other" only when forced.
 ---@param path string
----@return "absent"|"ours"|"other"
+---@return "absent"|"empty"|"ours"|"other"
 function M.owner(path)
   local f = io.open(path, "r")
   if not f then
@@ -364,10 +276,10 @@ function M.owner(path)
   end
   local first = f:read("*l")
   f:close()
-  if first == nil or first == M.MARKER then
-    return "ours" -- empty, or written by citeref
+  if first == nil then
+    return "empty"
   end
-  return "other"
+  return first == M.MARKER and "ours" or "other"
 end
 
 -- ─────────────────────────────────────────────────────────────
@@ -682,33 +594,10 @@ function M.write_bib(opts)
   return res
 end
 
---- Update the .bib after `buf` is saved: a file citeref wrote is kept up to
---- date, and a missing one is created when a document lists it as a
---- bibliography (\addbibresource, \bibliography, YAML `bibliography:`).
---- Files citeref did not write are never touched.
---- Returns nil when there is nothing to sync; `skipped = true` when neither
---- the cited keys nor the bib files changed since the last run.
----@param buf integer
+--- Bring one citeref file up to date.
 ---@return (CiterefWriteBibResult|{ skipped: boolean })|nil
-function M.sync(buf)
-  local name = vim.api.nvim_buf_get_name(buf)
-  if name == "" then
-    return nil
-  end
-  local r = resolve({ dir = vim.fn.fnamemodify(name, ":p:h") })
-  local owner = M.owner(r.out_path)
-  if owner == "other" then
-    return nil
-  end
-
-  local cited, nocite_all, bibs = M.cited_keys(r.dir, r.exclude)
-  if owner == "absent" and not bibs[r.out_path] then
-    return nil
-  end
+local function sync_file(r, cited, nocite_all)
   local prev = last[r.out_path]
-  if owner == "absent" then
-    prev = nil -- deleted since the last run
-  end
   if nocite_all then
     if not (prev and prev.nocite) then
       vim.notify("citeref: \\nocite{*} or @* cites the whole library; not syncing " .. basename(r.out_path), vim.log.levels.WARN)
@@ -734,6 +623,46 @@ function M.sync(buf)
   end
   remember(r, cited, res)
   return res
+end
+
+--- Bring the .bib files citeref wrote in `buf`'s folder up to date (those
+--- whose first line is M.MARKER, whatever their name). Nothing is created:
+--- files are created with :CiterefWriteBib / write_bib().
+--- Returns nil when there is nothing to sync, else the result for the first
+--- file (`skipped = true` when neither the cited keys nor the bib files
+--- changed since the last run) and a table of results by path.
+---@param buf integer
+---@return (CiterefWriteBibResult|{ skipped: boolean })|nil
+---@return table<string, CiterefWriteBibResult|{ skipped: boolean }>|nil
+function M.sync(buf)
+  local name = vim.api.nvim_buf_get_name(buf)
+  if name == "" then
+    return nil
+  end
+  local dir = vim.fn.fnamemodify(name, ":p:h")
+  local outputs = {}
+  for _, f in ipairs(vim.fn.globpath(dir, "*.bib", false, true)) do
+    if M.owner(f) == "ours" then
+      outputs[#outputs + 1] = abspath(f)
+    end
+  end
+  if #outputs == 0 then
+    return nil
+  end
+  table.sort(outputs)
+
+  local first, all = nil, {}
+  local cited, nocite_all
+  for _, out in ipairs(outputs) do
+    local r = resolve({ dir = dir, output = out })
+    if not cited then
+      cited, nocite_all = M.cited_keys(r.dir, r.exclude)
+    end
+    local res = sync_file(r, cited, nocite_all)
+    all[out] = res
+    first = first or res
+  end
+  return first, all
 end
 
 return M

@@ -219,46 +219,15 @@ describe("write_bib", function()
 end)
 
 -- ─────────────────────────────────────────────────────────────
--- bibliography files used by documents, ownership
+-- ownership
 -- ─────────────────────────────────────────────────────────────
 
-describe("latex_bibs / yaml_bibs", function()
-  local function collect_files(fn, lines)
-    local out = {}
-    fn(lines, function(f)
-      out[#out + 1] = f
-    end)
-    return out
-  end
-
-  it("reads \\addbibresource, \\addglobalbib and \\bibliography", function()
-    assert.same(
-      { "a.bib", "b.bib", "zotero.bib", "refs.bib", "other.bib" },
-      collect_files(bibwrite.latex_bibs, {
-        "\\addbibresource{a.bib} \\addbibresource[datatype=bibtex]{b.bib}",
-        "\\bibliography{zotero, refs.bib} % \\addbibresource{commented.bib}",
-        "\\addglobalbib{other.bib}",
-      })
-    )
-  end)
-
-  it("reads bibliography: from a YAML front matter", function()
-    assert.same({ "refs.bib" }, collect_files(bibwrite.yaml_bibs, { "---", "bibliography: refs.bib", "---" }))
-    assert.same({ "a.bib", "b.bib" }, collect_files(bibwrite.yaml_bibs, { "---", "bibliography: [a.bib, 'b.bib']", "---" }))
-    assert.same(
-      { "a.bib", "b.bib" },
-      collect_files(bibwrite.yaml_bibs, { "---", "bibliography:", "  - a.bib", '  - "b.bib"', "title: x", "---" })
-    )
-    assert.same({}, collect_files(bibwrite.yaml_bibs, { "text", "bibliography: refs.bib" }))
-  end)
-end)
-
 describe("owner", function()
-  it("tells absent, empty or citeref files from others", function()
+  it("tells absent, empty, citeref and other files apart", function()
     local f = vim.fn.tempname() .. ".bib"
     assert.equals("absent", bibwrite.owner(f))
     write(f, "")
-    assert.equals("ours", bibwrite.owner(f))
+    assert.equals("empty", bibwrite.owner(f))
     write(f, bibwrite.MARKER .. "\n\n@book{a,\n}\n")
     assert.equals("ours", bibwrite.owner(f))
     write(f, "@book{a,\n}\n")
@@ -280,7 +249,7 @@ describe("sync", function()
     write(lib, LIBRARY)
     package.loaded["citeref.config"] = nil
     require("citeref.config").set({ backend = "fzf", bib_files = { lib } })
-    write(dir .. "/main.tex", "\\cite{smith2020}\n")
+    write(dir .. "/main.tex", "\\addbibresource{references.bib}\n\\cite{smith2020}\n")
     vim.cmd.edit(dir .. "/main.tex")
     buf = vim.api.nvim_get_current_buf()
   end)
@@ -294,35 +263,37 @@ describe("sync", function()
     vim.cmd("silent write")
   end
 
+  -- create the file the way a user does, with :CiterefWriteBib
+  local function create(output)
+    return bibwrite.write_bib({ dir = dir, output = output, silent = true })
+  end
+
   it("is on by default", function()
     assert.is_true(require("citeref.config").defaults.write_bib.sync)
   end)
 
-  it("does nothing in a folder without the output file", function()
+  it("never creates a file, even one a document lists", function()
+    cite("book2021")
     assert.is_nil(bibwrite.sync(buf))
     assert.is_nil(read(dir .. "/references.bib"))
   end)
 
-  it("creates the output file when a document lists it as a bibliography", function()
-    vim.api.nvim_buf_set_lines(buf, 0, 0, false, { "\\addbibresource[label=x]{references.bib}" })
-    vim.cmd("silent write")
-    local res = bibwrite.sync(buf)
-    assert.equals(1, res.written)
-    assert.equals(bibwrite.MARKER, read(dir .. "/references.bib"):match("^[^\n]*"))
+  it("does not fill an empty file", function()
+    write(dir .. "/references.bib", "")
+    assert.is_nil(bibwrite.sync(buf))
+    assert.equals("", read(dir .. "/references.bib"))
   end)
 
   it("never touches a references.bib that citeref did not write", function()
     local mine = "@book{mine,\n  title = {My own library},\n}\n"
     write(dir .. "/references.bib", mine)
-    vim.api.nvim_buf_set_lines(buf, 0, 0, false, { "\\addbibresource{references.bib}" })
     cite("book2021")
     assert.is_nil(bibwrite.sync(buf))
     assert.equals(mine, read(dir .. "/references.bib"))
   end)
 
-  it("updates an existing output file when a citation is added", function()
-    write(dir .. "/references.bib", "")
-    assert.equals(1, bibwrite.sync(buf).written)
+  it("updates a file created with write_bib when a citation is added", function()
+    assert.equals(1, create().written)
     cite("book2021")
     local res = bibwrite.sync(buf)
     assert.is_true(res.changed)
@@ -330,9 +301,17 @@ describe("sync", function()
     assert.truthy(read(dir .. "/references.bib"):find("@book{book2021", 1, true))
   end)
 
+  it("syncs a file created under another name", function()
+    create("cited.bib")
+    cite("book2021")
+    local _, all = bibwrite.sync(buf)
+    assert.truthy(all[vim.fn.fnamemodify(dir .. "/cited.bib", ":p")])
+    assert.truthy(read(dir .. "/cited.bib"):find("@book{book2021", 1, true))
+    assert.is_nil(read(dir .. "/references.bib"))
+  end)
+
   it("skips the work when neither citations nor bib files changed", function()
-    write(dir .. "/references.bib", "")
-    bibwrite.sync(buf)
+    create()
     local reads = bibwrite.stats.bib_reads
     assert.is_true(bibwrite.sync(buf).skipped)
     vim.cmd("silent write") -- saving text without new citations
@@ -341,8 +320,7 @@ describe("sync", function()
   end)
 
   it("picks up an edited library entry", function()
-    write(dir .. "/references.bib", "")
-    bibwrite.sync(buf)
+    create()
     write(lib, (LIBRARY:gsub("A {Great} Paper", "A Corrected Title")))
     local res = bibwrite.sync(buf)
     assert.is_true(res.changed)
@@ -350,9 +328,8 @@ describe("sync", function()
   end)
 
   it("re-scans only documents that changed", function()
-    write(dir .. "/references.bib", "")
     write(dir .. "/appendix.tex", "\\cite{unused2000}\n")
-    bibwrite.sync(buf)
+    create()
     local scans = bibwrite.stats.doc_scans
     write(dir .. "/appendix.tex", "\\cite{chapter2021}\n")
     local res = bibwrite.sync(buf)
@@ -361,29 +338,26 @@ describe("sync", function()
     assert.equals(3, res.written)
   end)
 
-  it("creates a listed output file when a document is opened, without saving", function()
-    write(dir .. "/main.tex", "\\addbibresource{references.bib}\n\\cite{smith2020}\n")
-    vim.cmd("silent edit!")
-    require("citeref").attach()
-    local ok = vim.wait(1000, function()
-      return read(dir .. "/references.bib") ~= nil
-    end)
-    assert.is_true(ok)
-    assert.truthy(read(dir .. "/references.bib"):find("@article{smith2020", 1, true))
-  end)
-
-  it("does not touch another references.bib when a document is opened", function()
-    local mine = "@book{mine,\n  title = {Mine},\n}\n"
-    write(dir .. "/references.bib", mine)
-    write(dir .. "/main.tex", "\\addbibresource{references.bib}\n\\cite{smith2020}\n")
+  it("does not create a file when a document is opened", function()
     vim.cmd("silent edit!")
     require("citeref").attach()
     vim.wait(200)
-    assert.equals(mine, read(dir .. "/references.bib"))
+    assert.is_nil(read(dir .. "/references.bib"))
+  end)
+
+  it("updates a citeref file when a document is opened", function()
+    create()
+    write(dir .. "/main.tex", "\\cite{smith2020}\n\\cite{book2021}\n")
+    vim.cmd("silent edit!")
+    require("citeref").attach()
+    local ok = vim.wait(1000, function()
+      return (read(dir .. "/references.bib") or ""):find("@book{book2021", 1, true) ~= nil
+    end)
+    assert.is_true(ok)
   end)
 
   it("runs on save in attached buffers", function()
-    write(dir .. "/references.bib", "")
+    create()
     require("citeref").attach()
     cite("book2021")
     local ok = vim.wait(1000, function()
