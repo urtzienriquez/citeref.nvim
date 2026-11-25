@@ -16,6 +16,8 @@
 
 ---@class CiterefKeymapConfig
 ---@field enabled           boolean
+---@field cite_i            string|false   a citation in the buffer's syntax (LaTeX or Markdown)
+---@field cite_n            string|false
 ---@field cite_markdown_i   string|false
 ---@field cite_markdown_n   string|false
 ---@field cite_latex_i      string|false
@@ -59,6 +61,7 @@ M.defaults = {
     "pandoc",
     "tex",
     "latex",
+    "plaintex",
   },
 
   bib_files = nil,
@@ -75,6 +78,8 @@ M.defaults = {
 
   keymaps = {
     enabled = true,
+    cite_i = "<C-a>a",
+    cite_n = "<leader>ac",
     cite_markdown_i = "<C-a>m",
     cite_markdown_n = "<leader>am",
     cite_latex_i = "<C-a>l",

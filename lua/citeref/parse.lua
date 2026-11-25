@@ -32,7 +32,7 @@ end
 -- ─────────────────────────────────────────────────────────────
 
 --- Resolve the list of .bib files to use, merging configured paths with any
---- *.bib files found in the current working directory.
+--- *.bib files found beside the current buffer and in the current working directory.
 ---@return string[]
 function M.resolve_bib_files()
   local cfg = require("citeref.config").get()
@@ -59,8 +59,12 @@ function M.resolve_bib_files()
     end
   end
 
-  for _, f in ipairs(vim.fn.globpath(vim.fn.getcwd(), "*.bib", false, true)) do
-    add(f)
+  local here = vim.api.nvim_buf_get_name(0)
+  local dirs = { here ~= "" and vim.fn.fnamemodify(here, ":p:h") or nil, vim.fn.getcwd() }
+  for _, dir in ipairs(dirs) do
+    for _, f in ipairs(vim.fn.globpath(dir, "*.bib", false, true)) do
+      add(f)
+    end
   end
 
   if #files == 0 then
@@ -169,6 +173,19 @@ end
 --- Duplicate keys are dropped; configured bib_files come first, so the
 --- global library wins over local copies (e.g. a file from write_bib()).
 ---@return CiterefEntry[]
+local parsed = {} -- [path] = { stamp, entries }: each .bib parsed again only when it changes
+
+local function entries_of(path)
+  local st = vim.uv.fs_stat(path)
+  local stamp = st and (st.size .. ":" .. st.mtime.sec .. ":" .. st.mtime.nsec) or ""
+  local hit = parsed[path]
+  if not hit or hit.stamp ~= stamp then
+    hit = { stamp = stamp, entries = M.parse_bib(path) }
+    parsed[path] = hit
+  end
+  return hit.entries
+end
+
 function M.load_entries()
   local files = M.resolve_bib_files()
   if #files == 0 then
@@ -177,7 +194,7 @@ function M.load_entries()
   local entries = {}
   local seen = {}
   for _, f in ipairs(files) do
-    for _, e in ipairs(M.parse_bib(f)) do
+    for _, e in ipairs(entries_of(f)) do
       if not seen[e.key] then
         seen[e.key] = true
         entries[#entries + 1] = e
@@ -241,6 +258,14 @@ end
 -- Crossref format helper
 -- ─────────────────────────────────────────────────────────────
 
+--- Whether a filetype writes LaTeX (citations as \\cite{}, references as \\ref{}): TeX, and the
+--- Noweb files of R (rnoweb) and Julia (jnoweb).
+---@param ft string
+---@return boolean
+function M.is_latex(ft)
+  return ft == "tex" or ft == "latex" or ft == "plaintex" or ft == "rnoweb" or ft == "jnoweb"
+end
+
 --- Return the correct crossref insertion string for the current buffer's filetype.
 --- Quarto uses native @label syntax; R Markdown uses \@ref(fig:label) / \@ref(tab:label);
 --- LaTeX uses \ref{label} (label is echoed as-is, no prefix added).
@@ -254,7 +279,7 @@ function M.format_crossref(ref_type, label, bufnr, source)
   if ft == "quarto" then
     return "@" .. label
   end
-  if ft == "tex" or ft == "latex" or ft == "rnoweb" then
+  if M.is_latex(ft) then
     return string.format("\\ref{%s}", label)
   end
   if source == "latex" then
@@ -715,7 +740,7 @@ function M.load_labels(ref_type)
     -- R Markdown / Quarto / Markdown / Rnoweb: code chunks + LaTeX labels
     -- For rnoweb with tex_only, skip code chunks and only show LaTeX \label{}
     local cfg = require("citeref.config").get()
-    local skip_chunks = ft == "rnoweb" and cfg.picker.rnoweb_labels == "tex_only"
+    local skip_chunks = (ft == "rnoweb" or ft == "jnoweb") and cfg.picker.rnoweb_labels == "tex_only"
 
     if not skip_chunks then
       result = M.load_chunks()
@@ -724,7 +749,7 @@ function M.load_labels(ref_type)
     local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
     vim.list_extend(result, labels_from_lines(lines, cur_file, true, ref_type))
 
-    local rmd_files = vim.fn.globpath(cur_dir, "*.{rmd,Rmd,qmd,Qmd,rnw,Rnw}", false, true)
+    local rmd_files = vim.fn.globpath(cur_dir, "*.{rmd,Rmd,qmd,Qmd,rnw,Rnw,jnw,Jnw}", false, true)
     for _, f in ipairs(rmd_files) do
       if f ~= cur_file then
         vim.list_extend(result, labels_from_file(f, ref_type))

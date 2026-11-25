@@ -162,6 +162,8 @@ CONFIGURATION                                            *citeref-config*
 
       keymaps = {
         enabled = true,
+        cite_i            = "<C-a>a",   -- in the file's syntax: \cite{}
+        cite_n            = "<leader>ac",  -- (default LaTeX format) or @key
         cite_markdown_i   = "<C-a>m",
         cite_markdown_n   = "<leader>am",
         cite_latex_i      = "<C-a>l",

@@ -905,3 +905,58 @@ describe("chunk parsing from rnw file", function()
     end
   end)
 end)
+
+-- ─────────────────────────────────────────────────────────────
+-- the same in every LaTeX-like file; .bib files beside the buffer; the library parsed once
+-- ─────────────────────────────────────────────────────────────
+
+describe("LaTeX-like filetypes", function()
+  it("are TeX, Rnoweb and jnoweb (citations \\cite{}, references \\ref{})", function()
+    for _, ft in ipairs({ "tex", "latex", "plaintex", "rnoweb", "jnoweb" }) do
+      assert.is_true(parse.is_latex(ft), ft)
+    end
+    for _, ft in ipairs({ "rmd", "quarto", "markdown", "pandoc" }) do
+      assert.is_false(parse.is_latex(ft), ft)
+    end
+    local buf = vim.api.nvim_create_buf(false, true)
+    vim.bo[buf].filetype = "jnoweb"
+    assert.equals("\\ref{fig:a}", parse.format_crossref("fig", "fig:a", buf))
+    vim.api.nvim_buf_delete(buf, { force = true })
+  end)
+end)
+
+describe("the .bib files", function()
+  it("are found beside the buffer too, not only in the current directory", function()
+    local dir = vim.fn.tempname()
+    vim.fn.mkdir(dir, "p")
+    vim.fn.writefile({ "@article{here2024, title={Here}, author={A, B}, year={2024}}" }, dir .. "/refs.bib")
+    vim.cmd.edit(dir .. "/paper.tex")
+    local files = parse.resolve_bib_files()
+    assert.truthy(vim.tbl_contains(files, dir .. "/refs.bib"))
+    assert.truthy(vim.iter(parse.load_entries()):any(function(e) return e.key == "here2024" end))
+    vim.cmd("bwipeout!")
+  end)
+
+  it("are parsed again only when they change", function()
+    local dir = vim.fn.tempname()
+    vim.fn.mkdir(dir, "p")
+    local bib = dir .. "/lib.bib"
+    vim.fn.writefile({ "@article{one2020, title={One}, author={A}, year={2020}}" }, bib)
+    vim.cmd.edit(dir .. "/paper.tex")
+    local real, calls = parse.parse_bib, 0
+    parse.parse_bib = function(...)
+      calls = calls + 1
+      return real(...)
+    end
+    parse.load_entries()
+    parse.load_entries()
+    assert.equals(1, calls)
+    vim.uv.sleep(20)
+    vim.fn.writefile({ "@article{two2021, title={Two}, author={B}, year={2021}}" }, bib)
+    local keys = vim.tbl_map(function(e) return e.key end, parse.load_entries())
+    assert.equals(2, calls)
+    assert.same({ "two2021" }, keys)
+    parse.parse_bib = real
+    vim.cmd("bwipeout!")
+  end)
+end)

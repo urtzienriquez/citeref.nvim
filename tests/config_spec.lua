@@ -131,3 +131,12 @@ describe("config", function()
     assert.equals("50%", p.preview_size) -- default survives
   end)
 end)
+
+describe("the citation key in the buffer's syntax", function()
+  it("is <leader>ac (normal) and <C-a>a (insert) by default", function()
+    local d = require("citeref.config").defaults.keymaps
+    assert.equals("<leader>ac", d.cite_n)
+    assert.equals("<C-a>a", d.cite_i)
+    assert.is_function(require("citeref").cite)
+  end)
+end)

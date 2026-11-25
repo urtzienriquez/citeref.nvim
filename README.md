@@ -182,6 +182,9 @@ require("citeref").setup({
     -- Each action has an insert-mode (_i) and normal-mode (_n) variant.
     -- Set any to false to disable that individual mapping.
     -- Normal-mode keymaps require a picker backend; they warn otherwise.
+    cite_i            = "<C-a>a",      -- insert a citation in the file's syntax: \cite{key} (the
+                                       -- default LaTeX format) in TeX/Noweb, @key in Markdown
+    cite_n            = "<leader>ac",  -- the same (normal mode)
     cite_markdown_i   = "<C-a>m",      -- insert @key              (insert mode)
     cite_markdown_n   = "<leader>am",  -- insert @key              (normal mode)
     cite_latex_i      = "<C-a>l",      -- insert LaTeX citation — format prompt first (insert mode)

@@ -91,6 +91,37 @@ function M.cite_latex()
   end
 end
 
+--- A citation in the syntax of the buffer's filetype: LaTeX-like files (TeX, Rnoweb, jnoweb) get the
+--- default LaTeX command at once (default_latex_format: no format to choose; <C-l> still cycles them
+--- in the picker), the others a Markdown citation.
+function M.cite()
+  local ft = vim.bo.filetype
+  if not parse.is_latex(ft) then
+    return M.cite_markdown()
+  end
+  if is_picker() then
+    local entries = parse.load_entries()
+    if #entries == 0 then
+      return
+    end
+    local LATEX_FORMATS = require("citeref.latex_formats")
+    local ctx = require("citeref.util").save_context()
+    local cite = LATEX_FORMATS.enclosing_cite(vim.api.nvim_get_current_line(), ctx.col, ctx.was_insert_mode)
+    if cite then -- (inside a \cite{...}: its keys added to it)
+      ctx.latex_append = true
+      return registry.call("pick_citation", "latex", entries, ctx, cite.cmd)
+    end
+    registry.call("pick_citation", "latex", entries, ctx, nil)
+  elseif insert_mode() then
+    registry.call("show", "citation", "latex")
+  else
+    vim.notify(
+      "citeref: normal-mode cite requires a picker backend (fzf, telescope, snacks, or minipick).",
+      vim.log.levels.WARN
+    )
+  end
+end
+
 function M.cite_myst()
   if is_picker() then
     local entries = parse.load_entries()
@@ -242,6 +273,12 @@ local function set_keymaps()
   local km = require("citeref.config").get().keymaps
   if not km.enabled then
     return
+  end
+  if km.cite_i then
+    map("i", km.cite_i, M.cite, "citeref: insert citation (in this file's syntax)")
+  end
+  if km.cite_n then
+    map("n", km.cite_n, M.cite, "citeref: insert citation (in this file's syntax)")
   end
   if km.cite_markdown_i then
     map("i", km.cite_markdown_i, M.cite_markdown, "citeref: insert citation (markdown)")
