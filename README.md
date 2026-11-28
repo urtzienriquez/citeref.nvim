@@ -153,6 +153,7 @@ require("citeref").setup({
   -- Filetypes where citeref activates.
   filetypes = {
     "markdown", "rmd", "quarto", "rnoweb", "pandoc", "tex", "latex",
+    "neoffice", -- Word/LibreOffice documents through neoffice.nvim: [@key] becomes a Zotero citation
   },
 
   -- .bib files for citations.

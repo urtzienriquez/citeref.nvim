@@ -145,6 +145,8 @@ CONFIGURATION                                            *citeref-config*
       -- Filetypes where citeref activates.
       filetypes = {
         "markdown", "rmd", "quarto", "rnoweb", "pandoc", "tex", "latex",
+        "neoffice", -- Word/LibreOffice documents (neoffice.nvim): citations
+                    -- written as in R Markdown, [@key]
       },
 
       -- .bib files for citations.

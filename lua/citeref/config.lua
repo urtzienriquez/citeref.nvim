@@ -62,6 +62,7 @@ M.defaults = {
     "tex",
     "latex",
     "plaintex",
+    "neoffice", -- (Word and LibreOffice documents, through neoffice.nvim: citations as in R Markdown)
   },
 
   bib_files = nil,
